@@ -9,8 +9,10 @@
  * in order, a forced mistake (life loss + auto-discard + re-ready), a unanimous
  * star, level rewards, the play history, concentrate hold/release (cosmetic,
  * never blocks play), emotes (broadcast, rate limit, validation), disconnect/
- * pause/reconnect via session token, and the anti-cheat guarantee that other
- * players' card values are never sent.
+ * pause/reconnect via session token, room statistics (mistake attribution,
+ * reaction times, getStats, play-again keeping all-time but resetting the
+ * this-game section), and the anti-cheat guarantee that other players' card
+ * values are never sent.
  */
 
 const WebSocket = require('ws');
@@ -52,6 +54,7 @@ class Client {
   onMessage(msg) {
     if (msg.type === 'joined') this.joined = msg;
     if (msg.type === 'error') this.errors.push(msg);
+    if (msg.type === 'stats') this.statsMsg = msg;
     if (msg.type === 'state') {
       this.state = msg;
       // Anti-cheat check: no other player's live hand values may ever appear,
@@ -102,6 +105,22 @@ class Client {
           clearTimeout(timer);
           clearInterval(poll);
           resolve(this.errors[this.errors.length - 1]);
+        }
+      }, 25);
+    });
+  }
+
+  /** Request the room stats and wait for the dedicated reply. */
+  getStats() {
+    this.statsMsg = null;
+    this.send({ type: 'getStats' });
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Timeout waiting for stats')), STEP_TIMEOUT);
+      const poll = setInterval(() => {
+        if (this.statsMsg) {
+          clearTimeout(timer);
+          clearInterval(poll);
+          resolve(this.statsMsg);
         }
       }, 25);
     });
@@ -254,6 +273,24 @@ async function main() {
   for (const c of clients) c.send({ type: 'ready' });
   await everyone(clients, (s) => s.phase === 'playing', 'play resumes after re-ready');
 
+  // ---------- stats: mistake attribution + reaction times ----------
+  console.log('\n3b. Stats — mistake attribution, reaction times, no leaks');
+  const st1 = await alice.getStats();
+  const gRow = (name) => st1.game.players.find((r) => r.name === name);
+  ok(gRow(offender.name).mistakes === 1,
+    `mistake attributed to ${offender.name}, who played the too-high card`);
+  ok(st1.game.players.filter((r) => r.name !== offender.name).every((r) => r.mistakes === 0),
+    'players whose cards were flushed are not blamed');
+  const totalPlays = st1.game.players.reduce((n, r) => n + r.cardsPlayed, 0);
+  ok(totalPlays === 4, `stats count all plays so far: 3 (level 1) + 1 mistake = ${totalPlays}`);
+  const timedRows = st1.game.players.filter((r) => r.cardsPlayed > 0);
+  ok(timedRows.every((r) =>
+    r.avgMs > 0 && r.fastestMs > 0 &&
+    r.fastestMs <= r.avgMs && r.avgMs <= r.slowestMs && r.slowestMs < 60000),
+    'reaction times recorded, positive and plausible (fastest ≤ avg ≤ slowest)');
+  ok(!JSON.stringify(st1).includes('"hand"') && !/"card":/.test(JSON.stringify(st1)),
+    'stats expose only counts and timings — never card values');
+
   // ---------- disconnect / reconnect ----------
   console.log('\n4. Disconnect pauses the game; token reconnect restores the seat');
   const bobToken = bob.joined.token;
@@ -372,8 +409,69 @@ async function main() {
   await everyone(players2, (s) => s.phase === 'levelComplete', 'level 3 complete');
   ok(alice.state.lastReward === 'life' && alice.state.lives === 3, 'completing level 3 rewards +1 life');
 
+  // ---------- stats: emotes/stars counted, game over, play-again ----------
+  console.log('\n10. Stats — counters, game history, play-again keeps all-time');
+  const stPre = await bob2.getStats();
+  ok(stPre.game.players.find((r) => r.name === 'Carol').emotes === 2,
+    'emotes counted per player (Carol sent 2 valid ones)');
+  ok(stPre.game.players.find((r) => r.name === 'Bob').starsProposed === 1 &&
+     stPre.game.players.find((r) => r.name === 'Alice').starsProposed === 1,
+    'star proposals counted per player');
+  ok(stPre.allTime.gamesPlayed === 0, 'no finished games in the room history yet');
+
+  // Drive the game to a loss: whoever's lowest card is globally highest plays.
+  async function forceGameOver(clients) {
+    for (let i = 0; i < 200; i++) {
+      const s = clients[0].state;
+      if (s.phase === 'gameOver') return;
+      if (s.phase === 'won') throw new Error('unexpectedly won while forcing a loss');
+      if (s.phase === 'levelComplete') {
+        alice.send({ type: 'nextLevel' });
+        await everyone(clients, (x) => x.phase === 'readyCheck', 'next level dealt');
+        continue;
+      }
+      if (s.phase === 'readyCheck') {
+        for (const c of clients) c.send({ type: 'ready' });
+        await everyone(clients, (x) => x.phase !== 'readyCheck', 'all ready');
+        continue;
+      }
+      const holders = clients.filter((c) => c.hand.length > 0).sort((a, b) => a.hand[0] - b.hand[0]);
+      if (!holders.length) { await sleep(50); continue; }
+      const player = holders[holders.length - 1]; // a mistake whenever >1 player holds cards
+      const prevPile = player.state.pileCount;
+      player.send({ type: 'playCard' });
+      await everyone(clients, (x) => x.pileCount === prevPile + 1 || x.phase !== 'playing', 'forced play lands');
+    }
+    throw new Error('forceGameOver: too many iterations');
+  }
+  await forceGameOver(players2);
+  await everyone(players2, (s) => s.phase === 'gameOver', 'game over reached');
+  const lostLevel = alice.state.level;
+
+  const st2 = await alice.getStats();
+  ok(st2.allTime.gamesPlayed === 1 && st2.allTime.recentGames.length === 1 &&
+     st2.allTime.recentGames[0].result === 'lost' && st2.allTime.recentGames[0].level === lostLevel,
+    `finished game recorded in the room history (lost on level ${lostLevel})`);
+  ok(st2.allTime.bestLevel === lostLevel, `best-ever level for the room is ${lostLevel}`);
+  const sum = (rows, key) => rows.reduce((n, r) => n + r[key], 0);
+  ok(sum(st2.game.players, 'mistakes') === 3 + 1,
+    'every lost life traces back to an attributed mistake (3 forced + 1 earlier)');
+  ok(sum(st2.game.players, 'mistakes') === sum(st2.allTime.players, 'mistakes') &&
+     sum(st2.game.players, 'cardsPlayed') === sum(st2.allTime.players, 'cardsPlayed'),
+    'after one game, this-game and all-time totals match');
+
+  alice.send({ type: 'playAgain' });
+  await everyone(players2, (s) => s.phase === 'readyCheck' && s.level === 1, 'play again starts a new game');
+  const st3 = await carol.getStats();
+  ok(st3.game.players.every((r) => r.cardsPlayed === 0 && r.mistakes === 0 && r.emotes === 0),
+    'play-again resets the this-game stats');
+  ok(sum(st3.allTime.players, 'cardsPlayed') === sum(st2.allTime.players, 'cardsPlayed') &&
+     sum(st3.allTime.players, 'mistakes') === 4 && st3.allTime.gamesPlayed === 1,
+    'play-again keeps the room all-time stats and history');
+  ok(!JSON.stringify(st3).includes('"hand"'), 'stats stay leak-free after play-again');
+
   // ---------- anti-cheat ----------
-  console.log('\n10. Information hiding');
+  console.log('\n11. Information hiding');
   for (const c of players2) ok(!c.leakDetected, `${c.name} never received another player's card values (${c.leakDetected || 'clean'})`);
 
   for (const c of players2) c.ws.close();

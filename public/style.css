@@ -530,6 +530,31 @@ input[type="text"]:focus { border-color: var(--gold); }
 .concentrate-hand.fading { animation: conc-out 0.4s ease forwards; }
 @keyframes conc-out { to { opacity: 0; transform: translate(-50%, -50%) scale(0.7); } }
 
+/* ---------- focus glow: soft edge vignette while players concentrate ----------
+   A fixed, pointer-events:none overlay — never in the layout flow, so holding
+   or releasing Concentrate can never move the table. Layers hold constant
+   inset box-shadows; only their OPACITY is animated (cheap, compositable).
+   Blue deepens with the fraction of players holding; green = everyone. */
+#focus-glow { position: fixed; inset: 0; pointer-events: none; z-index: 12; }
+#focus-glow .glow {
+  position: absolute; inset: 0; opacity: 0;
+  transition: opacity 0.7s ease;
+  will-change: opacity;
+}
+/* Tight edge ring: the first hint that someone is focusing. */
+#focus-glow .glow-blue-1 { box-shadow: inset 0 0 clamp(34px, 5.5vw, 64px) 10px rgba(104, 172, 255, 0.7); }
+/* Wider wash that fades in as more of the table joins — the glow "grows". */
+#focus-glow .glow-blue-2 { box-shadow: inset 0 0 clamp(72px, 12vw, 150px) 24px rgba(88, 152, 255, 0.45); }
+/* Everyone holding: the ring turns a calm green with a slow, gentle breath. */
+#focus-glow .glow-green-inner {
+  position: absolute; inset: 0;
+  box-shadow:
+    inset 0 0 clamp(34px, 5.5vw, 64px) 10px rgba(115, 240, 175, 0.7),
+    inset 0 0 clamp(72px, 12vw, 150px) 24px rgba(95, 225, 160, 0.38);
+  animation: glow-breathe 3.2s ease-in-out infinite;
+}
+@keyframes glow-breathe { 50% { opacity: 0.7; } }
+
 /* ---------- emotes ---------- */
 .emote-bar { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: 100%; }
 .emote-btn {
@@ -626,6 +651,58 @@ input[type="text"]:focus { border-color: var(--gold); }
 #overlay-end.lost .overlay-panel { outline-color: rgba(255, 120, 105, 0.45); }
 #btn-end-leave { margin-top: 14px; }
 
+/* ---------- stats panel: the tavern ledger ---------- */
+#overlay-stats { z-index: 24; }
+.hud-btn { cursor: pointer; font: inherit; color: var(--ink); }
+.hud-btn:hover { border-color: var(--gold); }
+#btn-stats-lobby { margin-bottom: 4px; }
+#btn-stats-level, #btn-stats-end { margin-top: 12px; }
+.stats-panel {
+  width: min(560px, 100%);
+  max-height: min(86vh, 720px); max-height: min(86dvh, 720px);
+  overflow-y: auto; text-align: left;
+}
+.stats-panel h2 { text-align: center; }
+.stats-section h3 {
+  font-family: var(--serif); color: var(--gold-bright); font-size: 1.02rem;
+  margin: 16px 0 8px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(226, 178, 88, 0.22);
+}
+.stat-chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.stat-chip {
+  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(226, 178, 88, 0.15);
+  border-radius: 10px; padding: 6px 11px; font-size: 0.8rem; color: var(--ink-dim);
+}
+.stat-chip b { color: var(--gold-bright); }
+.stats-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.stats-table th {
+  color: var(--ink-dim); font-weight: 600; text-align: right; padding: 3px 6px;
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.stats-table td { padding: 5px 6px; text-align: right; border-top: 1px solid rgba(226, 178, 88, 0.09); }
+.stats-table th:first-child, .stats-table td:first-child { text-align: left; }
+.stats-table td.pname {
+  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 128px;
+}
+.stats-table td.pname .gone { color: var(--ink-dim); font-style: italic; }
+.recent-games { display: flex; gap: 6px; flex-wrap: wrap; }
+.game-chip {
+  font-size: 0.78rem; font-weight: 700; padding: 3px 9px; border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28); border: 1px solid;
+}
+.game-chip.won { border-color: rgba(255, 210, 110, 0.5); color: var(--gold-bright); }
+.game-chip.lost { border-color: rgba(255, 130, 115, 0.4); color: #ffb9af; }
+.superlatives { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.superlative {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(226, 178, 88, 0.12);
+  border-radius: 10px; padding: 7px 11px; font-size: 0.85rem;
+}
+.superlative .sup-title { color: var(--gold); font-weight: 700; }
+.superlative .sup-detail { color: var(--ink-dim); font-size: 0.78rem; }
+.stats-empty { color: var(--ink-dim); font-size: 0.85rem; font-style: italic; }
+#btn-stats-close { display: block; margin: 16px auto 0; }
+
 /* ---------- flash & toasts ---------- */
 #flash { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
 #flash.life-lost { animation: flash-red 0.7s ease; }
@@ -695,6 +772,10 @@ input[type="text"]:focus { border-color: var(--gold); }
   .btn-star, .btn-concentrate { padding: 8px 12px; font-size: 0.8rem; }
   .honor-note { display: none; }
   .avatar-option { font-size: 1.3rem; }
+  .stats-panel { padding: 22px 14px; }
+  .stats-table { font-size: 0.76rem; }
+  .stats-table td { padding: 4px 3px; }
+  .stats-table td.pname { max-width: 88px; }
 }
 
 @media (max-height: 620px) {

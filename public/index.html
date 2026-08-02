@@ -45,6 +45,7 @@
       <ul id="lobby-players" class="lobby-players"></ul>
       <p id="lobby-hint" class="muted-text"></p>
       <button id="btn-start" class="btn btn-primary btn-big hidden">Start game</button>
+      <button id="btn-stats-lobby" class="btn btn-ghost btn-small">📊 Room stats</button>
       <div class="rules-box">
         <h3>How it works</h3>
         <p>Everyone's cards (1–100) must hit the pile in <b>ascending order</b> — with no turns and
@@ -65,6 +66,7 @@
       <div class="hud-right">
         <span id="hud-lives" class="hud-chip hud-lives" title="Lives"></span>
         <span id="hud-stars" class="hud-chip hud-stars" title="Stars"></span>
+        <button id="btn-stats" class="hud-chip hud-btn" title="Room stats">📊</button>
       </div>
     </header>
 
@@ -92,6 +94,15 @@
     </div>
 
     <div id="concentrate-layer"></div>
+
+    <!-- Soft edge glow while players hold Concentrate. Fixed overlay, never in
+         the layout flow, never interactive: blue grows with the fraction of
+         players holding; green when everyone is. -->
+    <div id="focus-glow" aria-hidden="true">
+      <div class="glow glow-blue-1"></div>
+      <div class="glow glow-blue-2"></div>
+      <div class="glow glow-green"><div class="glow-green-inner"></div></div>
+    </div>
 
     <!-- Ready check overlay -->
     <div id="overlay-ready" class="overlay hidden">
@@ -126,6 +137,7 @@
         <p id="level-reward" class="reward-text"></p>
         <button id="btn-next-level" class="btn btn-primary btn-big hidden">Deal level 2 →</button>
         <p id="level-waiting" class="muted-text hidden">Waiting for the host to deal the next level…</p>
+        <button id="btn-stats-level" class="btn btn-ghost btn-small">📊 Stats</button>
       </div>
     </div>
 
@@ -136,12 +148,22 @@
         <p id="end-sub" class="muted-text"></p>
         <button id="btn-play-again" class="btn btn-primary btn-big hidden">Play again</button>
         <p id="end-waiting" class="muted-text hidden">Waiting for the host…</p>
+        <button id="btn-stats-end" class="btn btn-ghost btn-small">📊 Stats</button>
         <button id="btn-end-leave" class="btn btn-ghost btn-small">Leave room</button>
       </div>
     </div>
 
     <div id="flash"></div>
   </section>
+
+  <!-- Stats panel: available from the lobby, mid-game HUD, and end screens -->
+  <div id="overlay-stats" class="overlay hidden">
+    <div class="overlay-panel stats-panel">
+      <h2>📊 Tavern ledger</h2>
+      <div id="stats-body"></div>
+      <button id="btn-stats-close" class="btn btn-secondary btn-small">Close</button>
+    </div>
+  </div>
 
   <div id="toasts"></div>
 

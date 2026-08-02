@@ -101,7 +101,19 @@
       const prev = state;
       state = msg;
       processEvents(prev, msg);
+      // Purely cosmetic change (someone pressed/released Concentrate)?
+      // Update only the fixed overlay visuals: a full re-render would rebuild
+      // the table DOM, replaying entry animations (the pile visibly jumping)
+      // and interrupting drags. This keeps the layout pixel-identical.
+      if (prev && cosmeticOnlyChange(prev, msg)) {
+        updateConcentrateVisuals(msg);
+        return;
+      }
       render();
+      return;
+    }
+    if (msg.type === 'stats') {
+      showStatsPanel(msg);
       return;
     }
     if (msg.type === 'error') {
@@ -121,6 +133,11 @@
       }
     }
   }
+
+  /** True when two states differ only in per-player cosmetic flags. */
+  const stripCosmetic = (s) =>
+    JSON.stringify({ ...s, players: s.players.map((p) => ({ ...p, concentrating: false })) });
+  const cosmeticOnlyChange = (a, b) => stripCosmetic(a) === stripCosmetic(b);
 
   function processEvents(prev, s) {
     const fresh = (s.events || []).filter((ev) => ev.id > lastEventId);
@@ -317,6 +334,37 @@
   }
 
   /**
+   * All concentrate visuals live in fixed, pointer-events:none overlays so
+   * they can never move the table layout: the per-seat 🖐️ indicator and the
+   * screen-edge focus glow.
+   */
+  function updateConcentrateVisuals(s) {
+    updateConcentrateHands(s);
+    updateFocusGlow(s);
+  }
+
+  /**
+   * Screen-edge vignette: blue while some players hold Concentrate (deeper as
+   * the fraction grows), green when everyone connected is holding. Only layer
+   * opacities change — subtle by design, and never obscures cards or HUD.
+   */
+  function updateFocusGlow(s) {
+    const root = $('#focus-glow');
+    if (!root) return;
+    let frac = 0;
+    let all = false;
+    if (s && s.phase !== 'lobby') {
+      const connected = s.players.filter((p) => p.connected); // ghosts don't count
+      const holding = connected.filter((p) => p.concentrating);
+      frac = connected.length ? holding.length / connected.length : 0;
+      all = holding.length > 0 && holding.length === connected.length;
+    }
+    root.querySelector('.glow-blue-1').style.opacity = all ? '0' : String(Math.min(1, frac * 1.6));
+    root.querySelector('.glow-blue-2').style.opacity = all ? '0' : String(Math.max(0, (frac - 0.3) * 1.15));
+    root.querySelector('.glow-green').style.opacity = all ? '1' : '0';
+  }
+
+  /**
    * Glowing "hand resting on the table" for every player currently holding the
    * Concentrate button. Positioned over each player's seat; fades on release.
    */
@@ -367,6 +415,7 @@
     if (!state || state.phase === 'lobby') {
       const layer = $('#concentrate-layer');
       if (layer) layer.innerHTML = '';
+      updateFocusGlow(null);
     }
     if (!state) { showScreen('#screen-home'); return; }
     if (state.phase === 'lobby') {
@@ -433,7 +482,7 @@
     renderHand(s, my);
     renderPauseBanner(s);
     renderOverlays(s, my);
-    updateConcentrateHands(s);
+    updateConcentrateVisuals(s);
   }
 
   function renderOpponents(s) {
@@ -513,7 +562,16 @@
     }
   }
 
+  let lastPileKey = null; // skip pile rebuilds when nothing on the table changed
+
   function renderPile(s) {
+    // Rebuilding the pile DOM replays the top card's entry animation, so only
+    // do it when the pile or history actually changed. This makes ANY
+    // re-render (cosmetic or otherwise) layout-stable for the table center.
+    const key = `${s.pileCount}|${s.pile.join(',')}|${(s.history || []).map((h) => h.kind[0] + h.card).join(',')}`;
+    if (key === lastPileKey) return;
+    lastPileKey = key;
+
     const pile = $('#pile');
     pile.innerHTML = '';
     if (!s.pile.length) {
@@ -825,6 +883,146 @@
     return d.innerHTML;
   }
 
+  // ---------- stats panel (the tavern ledger) ----------
+  const openStats = () => sendMsg({ type: 'getStats' });
+  const closeStats = () => $('#overlay-stats').classList.add('hidden');
+
+  const fmtMs = (ms) =>
+    ms === null || ms === undefined ? '—'
+      : ms < 10000 ? `${(ms / 1000).toFixed(1)}s`
+        : `${Math.round(ms / 1000)}s`;
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  /** Player rows → a compact table. Counts and times only, never card values. */
+  function statsTable(rows) {
+    const cols = [
+      ['🃏', 'cards played', (r) => r.cardsPlayed],
+      ['💥', 'mistakes caused', (r) => r.mistakes],
+      ['⌀', 'average reaction', (r) => fmtMs(r.avgMs)],
+      ['⚡', 'fastest play', (r) => fmtMs(r.fastestMs)],
+      ['🐢', 'slowest play', (r) => fmtMs(r.slowestMs)],
+      ['★', 'stars proposed', (r) => r.starsProposed],
+      ['🎭', 'emotes sent', (r) => r.emotes],
+    ];
+    const table = el('table', 'stats-table');
+    const head = el('tr');
+    head.appendChild(el('th', '', 'Player'));
+    for (const [icon, title] of cols) {
+      const th = el('th', '', icon);
+      th.title = title;
+      head.appendChild(th);
+    }
+    table.appendChild(head);
+    for (const r of rows) {
+      const tr = el('tr');
+      const name = el('td', 'pname', `${r.avatar || ''} ${r.name}`.trim());
+      if (!r.present) name.appendChild(el('span', 'gone', ' (left)'));
+      tr.appendChild(name);
+      for (const [, , val] of cols) tr.appendChild(el('td', '', String(val(r))));
+      table.appendChild(tr);
+    }
+    return table;
+  }
+
+  /** A small, tasteful set of fun titles computed from the all-time rows. */
+  function superlatives(rows) {
+    const out = [];
+    const most = (arr, key) => arr.reduce((a, b) => (b[key] > a[key] ? b : a));
+    const add = (title, r, detail) => out.push({ title, who: `${r.avatar || ''} ${r.name}`.trim(), detail });
+
+    const guilty = rows.filter((r) => r.mistakes > 0);
+    if (guilty.length) {
+      const c = most(guilty, 'mistakes');
+      add('The Culprit 😅', c, `${c.mistakes} mistake${c.mistakes === 1 ? '' : 's'} caused`);
+    }
+    const timed = rows.filter((r) => r.avgMs !== null);
+    if (timed.length >= 2) {
+      const quick = timed.reduce((a, b) => (b.avgMs < a.avgMs ? b : a));
+      const slow = timed.reduce((a, b) => (b.avgMs > a.avgMs ? b : a));
+      add('Quickdraw ⚡', quick, `${fmtMs(quick.avgMs)} average reaction`);
+      if (slow !== quick) add('The Thinker 🐢', slow, `${fmtMs(slow.avgMs)} average reaction`);
+    }
+    const starry = rows.filter((r) => r.starsProposed > 0);
+    if (starry.length) {
+      const s = most(starry, 'starsProposed');
+      add('Star Gazer ✨', s, `${s.starsProposed} star${s.starsProposed === 1 ? '' : 's'} proposed`);
+    }
+    const loud = rows.filter((r) => r.emotes > 0);
+    if (loud.length) {
+      const e = most(loud, 'emotes');
+      add('Loudest Table 🎭', e, `${e.emotes} emote${e.emotes === 1 ? '' : 's'} sent`);
+    }
+    return out;
+  }
+
+  function showStatsPanel(msg) {
+    const body = $('#stats-body');
+    body.innerHTML = '';
+
+    // --- this game ---
+    const gameSec = el('div', 'stats-section');
+    gameSec.appendChild(el('h3', '', 'This game'));
+    if (msg.game.level > 0) {
+      const chips = el('div', 'stat-chip-row');
+      const lvl = el('span', 'stat-chip');
+      lvl.innerHTML = `Reached <b>level ${msg.game.level} / ${msg.game.totalLevels}</b>`;
+      chips.appendChild(lvl);
+      gameSec.appendChild(chips);
+      gameSec.appendChild(statsTable(msg.game.players));
+    } else {
+      gameSec.appendChild(el('p', 'stats-empty', 'No game underway yet — start one!'));
+    }
+    body.appendChild(gameSec);
+
+    // --- room all-time ---
+    const allSec = el('div', 'stats-section');
+    allSec.appendChild(el('h3', '', 'Room all-time'));
+    const a = msg.allTime;
+    if (a.gamesPlayed || a.players.length) {
+      const chips = el('div', 'stat-chip-row');
+      const games = el('span', 'stat-chip');
+      games.innerHTML = `<b>${a.gamesPlayed}</b> game${a.gamesPlayed === 1 ? '' : 's'} finished`;
+      const best = el('span', 'stat-chip');
+      best.innerHTML = `Best level: <b>${a.bestLevel || '—'}</b>`;
+      chips.append(games, best);
+      allSec.appendChild(chips);
+      if (a.recentGames.length) {
+        const recent = el('div', 'recent-games');
+        for (const g of [...a.recentGames].reverse()) {
+          const chip = el('span', `game-chip ${g.result}`,
+            `L${g.level} ${g.result === 'won' ? '🏆' : '💔'}`);
+          chip.title = `${g.players} players — ${g.result === 'won' ? `won all ${g.totalLevels} levels` : `lost on level ${g.level}`}`;
+          recent.appendChild(chip);
+        }
+        allSec.appendChild(recent);
+      }
+      if (a.players.length) {
+        allSec.appendChild(statsTable(a.players));
+        const sups = superlatives(a.players);
+        if (sups.length) {
+          const wrap = el('div', 'superlatives');
+          for (const sp of sups) {
+            const row = el('div', 'superlative');
+            row.append(el('span', 'sup-title', sp.title), el('span', '', sp.who), el('span', 'sup-detail', sp.detail));
+            wrap.appendChild(row);
+          }
+          allSec.appendChild(wrap);
+        }
+      }
+    } else {
+      allSec.appendChild(el('p', 'stats-empty', 'Nothing in the ledger yet.'));
+    }
+    body.appendChild(allSec);
+
+    $('#overlay-stats').classList.remove('hidden');
+  }
+
   // ---------- avatar picker ----------
   let myAvatar = localStorage.getItem(AVATAR_KEY);
   if (!AVATARS.includes(myAvatar)) {
@@ -935,6 +1133,14 @@
     btn.addEventListener('contextmenu', (e) => e.preventDefault()); // no long-press menu
     window.addEventListener('blur', release);
   })();
+  for (const id of ['#btn-stats', '#btn-stats-lobby', '#btn-stats-level', '#btn-stats-end']) {
+    $(id).addEventListener('click', openStats);
+  }
+  $('#btn-stats-close').addEventListener('click', closeStats);
+  $('#overlay-stats').addEventListener('click', (e) => {
+    if (e.target === $('#overlay-stats')) closeStats(); // tap outside to dismiss
+  });
+
   $('#btn-vote-yes').addEventListener('click', () => sendMsg({ type: 'voteStar', agree: true }));
   $('#btn-vote-no').addEventListener('click', () => sendMsg({ type: 'voteStar', agree: false }));
   $('#btn-next-level').addEventListener('click', () => sendMsg({ type: 'nextLevel' }));
@@ -942,6 +1148,7 @@
 
   function leaveRoom() {
     intentionalClose = true;
+    closeStats();
     clearSession();
     if (ws) ws.close();
     ws = null;

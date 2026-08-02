@@ -17,8 +17,19 @@ in a browser, joins the same room code, and plays together while talking on the 
   the card lifts, sways with your movement, and arcs into the pile with a satisfying
   thump (plus a haptic buzz on phones)
 - **🖐️ Concentrate (hold)**: press and HOLD the button to rest your hand on the
-  table — everyone sees a glowing hand at your seat until you let go. Purely a
-  signal: it never pauses the game or blocks plays
+  table — everyone sees a glowing hand at your seat, and a soft **blue glow around
+  the screen edges** that deepens as more players hold (turning **green when the
+  whole table is focused**). Purely a signal: it never pauses the game or blocks
+  plays, and it never shifts the layout — all concentrate visuals live in a fixed
+  overlay outside the page flow
+- **📊 Room stats** ("the tavern ledger"): a parchment panel — openable from the
+  lobby, the mid-game HUD, and the level/end screens — with this-game and room
+  all-time numbers per player: cards played, mistakes caused, average / fastest /
+  slowest reaction (pause, vote and ready-check time never counts), stars proposed,
+  emotes sent, plus recent-game history, best level, and superlatives like
+  *The Culprit 😅*, *Quickdraw ⚡* and *The Thinker 🐢*. Stats live server-side per
+  room (all-time survives "play again"; reconnects keep your numbers) and only
+  ever contain counts and timings — never card values
 - **Emotes**: high-five 🙌, 👏, 🔥, 😱, 🍑, 🍆, 💦 … float up from a player's seat
   without interrupting play
 - A warm **tavern table** look: wood-grain table, parchment cards with ornate
@@ -111,5 +122,8 @@ ready checks, in-order play, the play history (plays vs face-up discards), a for
 mistake (life loss + face-up auto-discard + re-ready pause), declined and unanimous
 star votes, level rewards, concentrate hold/release (the flag is broadcast to every
 client and never pauses play), emotes (broadcast, per-player rate limit, allowed-set
-validation), disconnect → pause → token reconnect, and verifies that no client ever
-receives another player's card values.
+validation), disconnect → pause → token reconnect, room statistics (mistakes
+attributed to the player who played the too-high card, plausible reaction times,
+`getStats` replies, play-again resetting this-game while keeping room all-time),
+and verifies that no client ever receives another player's card values — including
+via the stats.

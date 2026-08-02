@@ -134,9 +134,123 @@ function createRoom() {
     eventSeq: 0,
     recentEvents: [],
     lastActivity: Date.now(),
+    stats: createStats(), // per-room statistics; live as long as the room does
+    playableSince: null, // reaction-time clock: when play last became possible
   };
   rooms.set(room.code, room);
   return room;
+}
+
+// ---------------------------------------------------------------------------
+// Room statistics — counts and timings only, NEVER card values.
+// `game` resets on every new game; `allTime` accumulates until the room dies.
+// Keyed by stable player id, so reconnects keep a player's stats.
+// ---------------------------------------------------------------------------
+
+const newStatCounters = () => ({
+  mistakes: 0, // times this player played a card while lower ones were held
+  cardsPlayed: 0,
+  reactionTotal: 0, // ms; sum over plays of (play time − when play became possible)
+  reactionCount: 0,
+  fastest: null, // ms, single quickest play
+  slowest: null, // ms, single slowest play
+  starsProposed: 0,
+  emotes: 0,
+});
+
+function createStats() {
+  return { game: { players: {} }, allTime: { games: [], players: {} } };
+}
+
+/** The [thisGame, allTime] counter pair for a player, created on first touch. */
+function statPair(room, player) {
+  const pair = [];
+  for (const scope of [room.stats.game, room.stats.allTime]) {
+    let s = scope.players[player.id];
+    if (!s) s = scope.players[player.id] = { name: player.name, avatar: player.avatar, ...newStatCounters() };
+    s.name = player.name; // keep the snapshot fresh for departed-player rows
+    s.avatar = player.avatar;
+    pair.push(s);
+  }
+  return pair;
+}
+
+function recordPlay(room, player, reactionMs, mistake) {
+  for (const s of statPair(room, player)) {
+    s.cardsPlayed += 1;
+    s.reactionTotal += reactionMs;
+    s.reactionCount += 1;
+    if (s.fastest === null || reactionMs < s.fastest) s.fastest = reactionMs;
+    if (s.slowest === null || reactionMs > s.slowest) s.slowest = reactionMs;
+    if (mistake) s.mistakes += 1;
+  }
+}
+
+function bumpStat(room, player, key) {
+  for (const s of statPair(room, player)) s[key] += 1;
+}
+
+/**
+ * (Re)start the reaction clock: play just became possible. Called on
+ * ready-check completion, after each successful play, when a star vote
+ * resolves, and when a paused game unpauses — so vote/pause time is never
+ * counted as thinking time.
+ */
+function markPlayable(room) {
+  room.playableSince = Date.now();
+}
+
+function recordGameEnd(room, result) {
+  const games = room.stats.allTime.games;
+  games.push({
+    level: room.level,
+    totalLevels: room.totalLevels,
+    players: room.players.length,
+    result, // 'won' | 'lost'
+    at: Date.now(),
+  });
+  if (games.length > 20) games.splice(0, games.length - 20);
+}
+
+function statRow(room, id, s) {
+  const inRoom = room.players.find((p) => p.id === id);
+  return {
+    id,
+    name: s.name,
+    avatar: s.avatar,
+    present: !!inRoom,
+    connected: !!(inRoom && inRoom.connected),
+    mistakes: s.mistakes,
+    cardsPlayed: s.cardsPlayed,
+    avgMs: s.reactionCount ? Math.round(s.reactionTotal / s.reactionCount) : null,
+    fastestMs: s.fastest,
+    slowestMs: s.slowest,
+    starsProposed: s.starsProposed,
+    emotes: s.emotes,
+  };
+}
+
+/** Sent only on request (`getStats`) — never bloats the state broadcast. */
+function statsFor(room) {
+  const { game, allTime } = room.stats;
+  let bestLevel = allTime.games.reduce((m, g) => Math.max(m, g.level), 0);
+  if (room.phase !== 'lobby') bestLevel = Math.max(bestLevel, room.level);
+  return {
+    type: 'stats',
+    game: {
+      level: room.level,
+      totalLevels: room.totalLevels,
+      phase: room.phase,
+      players: room.players.map((p) =>
+        statRow(room, p.id, game.players[p.id] || { name: p.name, avatar: p.avatar, ...newStatCounters() })),
+    },
+    allTime: {
+      bestLevel,
+      gamesPlayed: allTime.games.length,
+      recentGames: allTime.games.slice(-10),
+      players: Object.entries(allTime.players).map(([id, s]) => statRow(room, id, s)),
+    },
+  };
 }
 
 function createPlayer(name, isHost, avatar) {
@@ -193,6 +307,8 @@ function startGame(room) {
   room.stars = 1;
   room.level = 1;
   room.lastReward = null;
+  room.stats.game = { players: {} }; // fresh "this game" section; all-time persists
+  for (const p of room.players) statPair(room, p); // seed a row for everyone
   emit(room, { kind: 'gameStarted', players: n, totalLevels: room.totalLevels });
   dealLevel(room);
 }
@@ -212,6 +328,7 @@ function completeLevel(room) {
   } else {
     room.phase = 'levelComplete';
   }
+  if (room.phase === 'won') recordGameEnd(room, 'won');
 }
 
 // The acting host: the real host, or the first connected player if the host
@@ -352,7 +469,11 @@ function doRejoin(ws, msg) {
   attach(ws, room, player);
   player.connected = true;
   room.lastActivity = Date.now();
-  if (wasDisconnected) emit(room, { kind: 'playerReconnected', name: player.name });
+  if (wasDisconnected) {
+    emit(room, { kind: 'playerReconnected', name: player.name });
+    // Unpaused: don't count the disconnect pause as anyone's thinking time.
+    if (room.phase === 'playing' && room.players.every((p) => p.connected)) markPlayable(room);
+  }
   send(ws, { type: 'joined', code: room.code, playerId: player.id, token: player.token, name: player.name });
   broadcast(room);
 }
@@ -370,6 +491,7 @@ function doReady(room, player) {
   if (room.players.every((p) => p.ready && p.connected)) {
     room.phase = 'playing';
     room.readyReason = null;
+    markPlayable(room);
     emit(room, { kind: 'playBegins', level: room.level });
   }
 }
@@ -379,6 +501,11 @@ function doPlayCard(room, player) {
   if (room.vote) fail('A star vote is in progress');
   if (room.players.some((p) => !p.connected)) fail('Game paused — waiting for a player to reconnect');
   if (player.hand.length === 0) fail('You have no cards left');
+
+  // Reaction time: from when play last became possible to this play. The clock
+  // is reset around ready-checks, star votes, and pauses, so none of that
+  // counts as thinking time.
+  const reactionMs = Math.max(1, Date.now() - (room.playableSince || Date.now()));
 
   const card = player.hand.shift(); // hands are kept sorted; only the lowest is ever playable
   room.pile.push(card);
@@ -396,12 +523,16 @@ function doPlayCard(room, player) {
     }
   }
 
+  // The mistake is attributed to the player who played the too-high card.
+  recordPlay(room, player, reactionMs, busted.length > 0);
+
   if (busted.length) {
     room.lives -= 1;
     emit(room, { kind: 'mistake', playerId: player.id, name: player.name, card, busted, livesLeft: room.lives });
     if (room.lives <= 0) {
       room.phase = 'gameOver';
       room.vote = null;
+      recordGameEnd(room, 'lost');
       emit(room, { kind: 'gameOver', level: room.level });
       return;
     }
@@ -416,6 +547,7 @@ function doPlayCard(room, player) {
   } else {
     emit(room, { kind: 'cardPlayed', playerId: player.id, name: player.name, card });
     if (allHandsEmpty(room)) completeLevel(room);
+    else markPlayable(room); // next play's reaction clock starts now
   }
 }
 
@@ -425,6 +557,7 @@ function doProposeStar(room, player) {
   if (room.stars < 1) fail('No stars left');
   if (room.players.some((p) => !p.connected)) fail('Game paused — waiting for a player to reconnect');
   room.vote = { proposerId: player.id, votes: { [player.id]: true } };
+  bumpStat(room, player, 'starsProposed');
   emit(room, { kind: 'starProposed', playerId: player.id, name: player.name });
 }
 
@@ -433,6 +566,7 @@ function doVoteStar(room, player, agree) {
   if (room.vote.votes[player.id]) fail('You already agreed');
   if (!agree) {
     room.vote = null;
+    markPlayable(room); // vote time never counts as thinking time
     emit(room, { kind: 'starDeclined', playerId: player.id, name: player.name });
     return;
   }
@@ -452,6 +586,7 @@ function doVoteStar(room, player, agree) {
     }
     emit(room, { kind: 'starUsed', discarded, starsLeft: room.stars });
     if (allHandsEmpty(room)) completeLevel(room);
+    else markPlayable(room); // vote resolved — reaction clock restarts
   }
 }
 
@@ -490,6 +625,7 @@ function doEmote(room, player, emote) {
   const now = Date.now();
   if (now - player.lastEmoteAt < EMOTE_COOLDOWN_MS) fail('Easy there — one emote per second');
   player.lastEmoteAt = now;
+  bumpStat(room, player, 'emotes');
   // Cosmetic only: broadcast and move on, never touching game state.
   emit(room, { kind: 'emote', playerId: player.id, name: player.name, emote });
 }
@@ -521,6 +657,7 @@ function doPlayAgain(room, player) {
     room.level = 0;
     room.pile = [];
     room.history = [];
+    room.stats.game = { players: {} }; // this-game section resets; all-time persists
     emit(room, { kind: 'backToLobby' });
   } else {
     startGame(room);
@@ -577,6 +714,9 @@ function handleMessage(ws, msg) {
   const room = ws._room;
   const player = ws._player;
   if (!room || !player) fail('You are not in a room');
+
+  // Read-only stats request: reply to the asker only, no state broadcast.
+  if (msg.type === 'getStats') return send(ws, statsFor(room));
 
   switch (msg.type) {
     case 'start': doStart(room, player); break;
