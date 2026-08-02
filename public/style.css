@@ -64,10 +64,15 @@ body {
 .btn-big { font-size: 1.1rem; padding: 16px 28px; width: 100%; }
 .btn-small { font-size: 0.85rem; padding: 8px 14px; }
 .btn-row { display: flex; gap: 12px; justify-content: center; }
-.btn-shuriken {
+.btn-star {
   background: linear-gradient(135deg, #b45309, #92400e);
   border-color: rgba(251, 191, 36, 0.4); color: #fef3c7;
 }
+.btn-concentrate {
+  background: linear-gradient(135deg, #4338ca, #3730a3);
+  border-color: rgba(165, 180, 252, 0.4); color: #e0e7ff;
+}
+.btn-star, .btn-concentrate { padding: 10px 16px; font-size: 0.9rem; }
 
 /* ---------- home ---------- */
 .home-card {
@@ -152,8 +157,8 @@ input[type="text"]:focus { border-color: var(--accent-deep); }
 .hud-level { color: var(--accent); }
 .hud-code { color: var(--ink-dim); letter-spacing: 0.15em; font-size: 0.8rem; }
 .hud-lives { color: var(--danger); }
-.hud-shurikens { color: var(--gold); }
-.hud-lives.bump, .hud-shurikens.bump { animation: bump 0.6s ease; }
+.hud-stars { color: var(--gold); }
+.hud-lives.bump, .hud-stars.bump { animation: bump 0.6s ease; }
 @keyframes bump { 30% { transform: scale(1.3); } }
 
 /* ---------- table ---------- */
@@ -183,7 +188,7 @@ input[type="text"]:focus { border-color: var(--accent-deep); }
 .opponent .opp-status { font-size: 0.7rem; color: var(--ink-dim); min-height: 1em; }
 .opponent .opp-status.ok { color: var(--accent); }
 .opponent .opp-status.bad { color: var(--danger); }
-.opp-backs { display: flex; align-items: center; height: 44px; }
+.opp-backs { display: flex; align-items: flex-start; height: 50px; padding-top: 4px; position: relative; }
 .card-back {
   width: 30px; height: 42px; border-radius: 5px;
   background: linear-gradient(135deg, #3b4a8f 0%, #232c55 60%, #3b4a8f 100%);
@@ -193,8 +198,20 @@ input[type="text"]:focus { border-color: var(--accent-deep); }
   background-image: repeating-linear-gradient(45deg, rgba(165, 180, 252, 0.12) 0 3px, transparent 3px 8px);
 }
 .card-back:first-child { margin-left: 0; }
-.opp-backs .back-count { margin-left: 6px; font-size: 0.8rem; color: var(--ink-dim); font-weight: 700; }
-.opp-backs .no-cards { font-size: 0.75rem; color: var(--ink-dim); font-style: italic; }
+/* Hearthstone-style fan: each back is arced from a low pivot point. */
+.card-back.fanned { margin-left: -19px; transform-origin: 50% 160%; }
+.opp-backs .back-count {
+  position: absolute; top: -8px; right: -14px;
+  background: rgba(0, 0, 0, 0.7); border: 1px solid var(--panel-edge);
+  border-radius: 999px; padding: 1px 7px;
+  font-size: 0.72rem; color: var(--ink); font-weight: 700;
+}
+.opp-backs .no-cards { font-size: 0.75rem; color: var(--ink-dim); font-style: italic; align-self: center; }
+.opponent .avatar { margin-right: 3px; }
+.card-back.fly-card {
+  position: fixed; margin: 0; z-index: 25; pointer-events: none;
+  transition: transform 0.5s cubic-bezier(0.3, 0.7, 0.3, 1), opacity 0.5s ease;
+}
 
 .discard-row { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; min-height: 0; }
 .discard-chip {
@@ -238,6 +255,32 @@ input[type="text"]:focus { border-color: var(--accent-deep); }
 .pile-card.under-2 { transform: rotate(4deg) translate(7px, 3px); filter: brightness(0.68); }
 .pile-card.under-1, .pile-card.under-2 { font-size: 2.6rem; }
 
+/* Highlighted drop zone while a card is being dragged over the pile. */
+#pile.drop-target::after {
+  content: ""; position: absolute; inset: -14px;
+  border: 3px dashed var(--accent); border-radius: 20px;
+  box-shadow: 0 0 34px rgba(94, 234, 212, 0.4), inset 0 0 22px rgba(94, 234, 212, 0.15);
+  pointer-events: none; z-index: 5;
+}
+
+/* Everything played this level, in order (discards shown struck-through). */
+.pile-history {
+  display: flex; gap: 4px; align-items: center;
+  max-width: min(92vw, 520px); overflow-x: auto;
+  padding: 3px 8px; scrollbar-width: thin;
+}
+.hist-chip {
+  flex-shrink: 0; min-width: 26px; text-align: center;
+  font-size: 0.75rem; font-weight: 800; padding: 3px 6px; border-radius: 6px;
+  background: var(--card-face); color: var(--card-ink);
+  border: 1px solid rgba(0, 0, 0, 0.25); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
+  animation: chip-in 0.35s ease;
+}
+.hist-chip.discard {
+  background: rgba(153, 27, 27, 0.5); color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.55); text-decoration: line-through;
+}
+
 /* ---------- my hand ---------- */
 #me-area {
   width: 100%; z-index: 4;
@@ -278,12 +321,57 @@ input[type="text"]:focus { border-color: var(--accent-deep); }
 @keyframes leave-up { to { transform: translateY(-120px) scale(0.7); opacity: 0; } }
 .hand-empty-note { color: var(--ink-dim); font-size: 0.9rem; align-self: center; }
 
+/* Drag-to-play: the playable card follows the pointer, mouse or touch. */
+.hand-card.playable { touch-action: none; }
+.hand-card.dragging {
+  transition: none; z-index: 60 !important; cursor: grabbing;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.65), 0 0 0 3px var(--accent);
+}
+.hand-card.snapping { transition: transform 0.2s ease; }
+
 #action-bar {
-  display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
   padding: 0 14px;
 }
 .honor-note { font-size: 0.78rem; color: var(--ink-dim); }
 .honor-note b { color: var(--gold); }
+
+/* ---------- emotes ---------- */
+.emote-bar { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.emote-btn {
+  font-size: 1.15rem; line-height: 1; padding: 7px 9px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--panel-edge);
+  border-radius: 10px; cursor: pointer;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+.emote-btn:hover { transform: scale(1.15); background: rgba(255, 255, 255, 0.14); }
+.emote-btn:active { transform: scale(0.95); }
+.emote-float {
+  position: fixed; z-index: 45; pointer-events: none;
+  font-size: 2.3rem; transform: translate(-50%, 0);
+  animation: emote-rise 1.8s ease-out forwards;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+}
+.emote-float .emote-from { position: absolute; bottom: -8px; right: -12px; font-size: 1.05rem; }
+@keyframes emote-rise {
+  0% { opacity: 0; transform: translate(-50%, 12px) scale(0.5); }
+  12% { opacity: 1; transform: translate(-50%, -12px) scale(1.2); }
+  100% { opacity: 0; transform: translate(-50%, -150px) scale(1); }
+}
+
+/* ---------- avatars ---------- */
+.avatar-picker { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.avatar-option {
+  font: inherit; font-size: 1.5rem; line-height: 1; padding: 8px 0;
+  background: rgba(0, 0, 0, 0.3); border: 2px solid var(--panel-edge);
+  border-radius: 10px; cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.avatar-option:hover { transform: scale(1.08); }
+.avatar-option.selected {
+  border-color: var(--accent); background: rgba(94, 234, 212, 0.12);
+  box-shadow: 0 0 14px rgba(94, 234, 212, 0.3);
+}
 
 /* ---------- pause banner ---------- */
 .pause-banner {
@@ -347,7 +435,7 @@ input[type="text"]:focus { border-color: var(--accent-deep); }
   25% { background: rgba(220, 38, 38, 0.35); }
   100% { background: rgba(220, 38, 38, 0); }
 }
-#flash.shuriken { animation: flash-gold 0.7s ease; }
+#flash.star { animation: flash-gold 0.7s ease; }
 @keyframes flash-gold {
   0% { background: rgba(251, 191, 36, 0); }
   25% { background: rgba(251, 191, 36, 0.22); }
@@ -391,7 +479,12 @@ input[type="text"]:focus { border-color: var(--accent-deep); }
   .hud-code { display: none; }
   .opponent { min-width: 72px; padding: 6px 8px; }
   .card-back { width: 24px; height: 34px; margin-left: -12px; }
+  .card-back.fanned { margin-left: -15px; }
   .logo { font-size: 2.4rem; }
+  .emote-btn { font-size: 1rem; padding: 6px 7px; }
+  .btn-star, .btn-concentrate { padding: 8px 12px; font-size: 0.8rem; }
+  .honor-note { display: none; }
+  .avatar-option { font-size: 1.3rem; }
 }
 
 @media (max-height: 620px) {

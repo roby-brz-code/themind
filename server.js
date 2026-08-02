@@ -29,7 +29,14 @@ const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 5;
 
 // Rewards granted when the given level is COMPLETED.
-const LEVEL_REWARDS = { 2: 'shuriken', 3: 'life', 5: 'shuriken', 6: 'life', 8: 'shuriken', 9: 'life' };
+const LEVEL_REWARDS = { 2: 'star', 3: 'life', 5: 'star', 6: 'life', 8: 'star', 9: 'life' };
+
+// Avatars a player may pick; anything else falls back to a random one.
+const AVATARS = ['🦊', '🐼', '🐸', '🦉', '🐙', '🦄', '🐯', '🐨', '🐺', '🦁', '🐵', '🐹'];
+
+// Emotes players can broadcast during a game. Cosmetic only — never touch game state.
+const EMOTES = ['🙌', '👏', '🔥', '😱', '😅', '❤️', '🤯', '🎉'];
+const EMOTE_COOLDOWN_MS = 1000;
 
 const levelsFor = (n) => (n <= 2 ? 12 : n === 3 ? 10 : 8);
 const livesFor = (n) => Math.min(n, 4);
@@ -111,12 +118,14 @@ function createRoom() {
     code: makeCode(),
     players: [],
     phase: 'lobby', // lobby | readyCheck | playing | levelComplete | gameOver | won
-    readyReason: null, // levelStart | lifeLost
+    readyReason: null, // levelStart | lifeLost | concentrate
     level: 0,
     totalLevels: 0,
     lives: 0,
-    shurikens: 0,
+    stars: 0,
     pile: [],
+    history: [], // everything revealed this level, in order: { card, kind: 'played'|'discard', playerId }
+    concentratorId: null, // who called the current concentrate pause
     vote: null, // { proposerId, votes: { [playerId]: true } }
     lastReward: null,
     eventSeq: 0,
@@ -127,17 +136,19 @@ function createRoom() {
   return room;
 }
 
-function createPlayer(name, isHost) {
+function createPlayer(name, isHost, avatar) {
   return {
     id: newId(),
     token: newToken(),
     name,
+    avatar,
     isHost,
     connected: true,
     ws: null,
     hand: [],
     discards: [], // face-up discards this level, visible to everyone
     ready: false,
+    lastEmoteAt: 0,
   };
 }
 
@@ -164,7 +175,9 @@ function dealLevel(room) {
     p.ready = false;
   }
   room.pile = [];
+  room.history = [];
   room.vote = null;
+  room.concentratorId = null;
   room.phase = 'readyCheck';
   room.readyReason = 'levelStart';
 }
@@ -173,7 +186,7 @@ function startGame(room) {
   const n = room.players.length;
   room.totalLevels = levelsFor(n);
   room.lives = livesFor(n);
-  room.shurikens = 1;
+  room.stars = 1;
   room.level = 1;
   room.lastReward = null;
   emit(room, { kind: 'gameStarted', players: n, totalLevels: room.totalLevels });
@@ -185,7 +198,7 @@ const allHandsEmpty = (room) => room.players.every((p) => p.hand.length === 0);
 function completeLevel(room) {
   const reward = LEVEL_REWARDS[room.level] || null;
   if (reward === 'life') room.lives += 1;
-  if (reward === 'shuriken') room.shurikens += 1;
+  if (reward === 'star') room.stars += 1;
   room.lastReward = reward;
   room.vote = null;
   emit(room, { kind: 'levelComplete', level: room.level, reward });
@@ -216,19 +229,21 @@ function stateFor(room, viewer) {
     room.phase === 'levelComplete' ||
     room.phase === 'gameOver' ||
     room.phase === 'won' ||
-    (room.phase === 'readyCheck' && room.readyReason === 'lifeLost');
+    (room.phase === 'readyCheck' && ['lifeLost', 'concentrate'].includes(room.readyReason));
   return {
     type: 'state',
     code: room.code,
     you: viewer.id,
     phase: room.phase,
     readyReason: room.readyReason,
+    concentratorId: room.concentratorId,
     level: room.level,
     totalLevels: room.totalLevels,
     lives: room.lives,
-    shurikens: room.shurikens,
+    stars: room.stars,
     pile: room.pile.slice(-4),
     pileCount: room.pile.length,
+    history: room.history, // face-up cards only — safe to share with everyone
     hand: showOwnHand ? viewer.hand : null,
     handCount: viewer.hand.length,
     lastReward: room.lastReward,
@@ -237,6 +252,7 @@ function stateFor(room, viewer) {
     players: room.players.map((p) => ({
       id: p.id,
       name: p.name,
+      avatar: p.avatar,
       isHost: p.isHost,
       connected: p.connected,
       cardCount: p.hand.length,
@@ -276,6 +292,11 @@ function cleanName(raw) {
   return name;
 }
 
+// Must be one of the allowed avatars; anything else gets a random one.
+function cleanAvatar(raw) {
+  return AVATARS.includes(raw) ? raw : AVATARS[crypto.randomInt(AVATARS.length)];
+}
+
 function attach(ws, room, player) {
   ws._room = room;
   ws._player = player;
@@ -286,7 +307,7 @@ function doCreate(ws, msg) {
   if (ws._room) fail('Already in a room');
   const name = cleanName(msg.name);
   const room = createRoom();
-  const player = createPlayer(name, true);
+  const player = createPlayer(name, true, cleanAvatar(msg.avatar));
   room.players.push(player);
   attach(ws, room, player);
   send(ws, { type: 'joined', code: room.code, playerId: player.id, token: player.token, name });
@@ -302,7 +323,7 @@ function doJoin(ws, msg) {
   if (!['lobby', 'gameOver', 'won'].includes(room.phase)) fail('That game is in progress — wait for it to finish');
   if (room.players.length >= MAX_PLAYERS) fail(`Room is full (max ${MAX_PLAYERS} players)`);
   if (room.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) fail('That name is already taken in this room');
-  const player = createPlayer(name, false);
+  const player = createPlayer(name, false, cleanAvatar(msg.avatar));
   room.players.push(player);
   attach(ws, room, player);
   room.lastActivity = Date.now();
@@ -345,18 +366,20 @@ function doReady(room, player) {
   if (room.players.every((p) => p.ready && p.connected)) {
     room.phase = 'playing';
     room.readyReason = null;
+    room.concentratorId = null;
     emit(room, { kind: 'playBegins', level: room.level });
   }
 }
 
 function doPlayCard(room, player) {
   if (room.phase !== 'playing') fail('You can only play cards during a level');
-  if (room.vote) fail('A shuriken vote is in progress');
+  if (room.vote) fail('A star vote is in progress');
   if (room.players.some((p) => !p.connected)) fail('Game paused — waiting for a player to reconnect');
   if (player.hand.length === 0) fail('You have no cards left');
 
   const card = player.hand.shift(); // hands are kept sorted; only the lowest is ever playable
   room.pile.push(card);
+  room.history.push({ card, kind: 'played', playerId: player.id });
 
   // A mistake: someone else still holds one or more lower cards.
   const busted = [];
@@ -365,6 +388,7 @@ function doPlayCard(room, player) {
     if (lower.length) {
       p.hand = p.hand.filter((c) => c >= card);
       p.discards.push(...lower);
+      for (const c of lower) room.history.push({ card: c, kind: 'discard', playerId: p.id });
       busted.push({ playerId: p.id, name: p.name, cards: lower });
     }
   }
@@ -392,39 +416,61 @@ function doPlayCard(room, player) {
   }
 }
 
-function doProposeShuriken(room, player) {
-  if (room.phase !== 'playing') fail('Shurikens can only be proposed during a level');
-  if (room.vote) fail('A shuriken vote is already in progress');
-  if (room.shurikens < 1) fail('No shurikens left');
+function doProposeStar(room, player) {
+  if (room.phase !== 'playing') fail('Stars can only be proposed during a level');
+  if (room.vote) fail('A star vote is already in progress');
+  if (room.stars < 1) fail('No stars left');
   if (room.players.some((p) => !p.connected)) fail('Game paused — waiting for a player to reconnect');
   room.vote = { proposerId: player.id, votes: { [player.id]: true } };
-  emit(room, { kind: 'shurikenProposed', playerId: player.id, name: player.name });
+  emit(room, { kind: 'starProposed', playerId: player.id, name: player.name });
 }
 
-function doVoteShuriken(room, player, agree) {
-  if (!room.vote) fail('There is no shuriken vote in progress');
+function doVoteStar(room, player, agree) {
+  if (!room.vote) fail('There is no star vote in progress');
   if (room.vote.votes[player.id]) fail('You already agreed');
   if (!agree) {
     room.vote = null;
-    emit(room, { kind: 'shurikenDeclined', playerId: player.id, name: player.name });
+    emit(room, { kind: 'starDeclined', playerId: player.id, name: player.name });
     return;
   }
   room.vote.votes[player.id] = true;
   if (room.players.every((p) => room.vote.votes[p.id])) {
-    // Unanimous: use the shuriken. Everyone discards their lowest card face-up.
-    room.shurikens -= 1;
+    // Unanimous: use the star. Everyone discards their lowest card face-up.
+    room.stars -= 1;
     room.vote = null;
     const discarded = [];
     for (const p of room.players) {
       if (p.hand.length) {
         const c = p.hand.shift();
         p.discards.push(c);
+        room.history.push({ card: c, kind: 'discard', playerId: p.id });
         discarded.push({ playerId: p.id, name: p.name, card: c });
       }
     }
-    emit(room, { kind: 'shurikenUsed', discarded, shurikensLeft: room.shurikens });
+    emit(room, { kind: 'starUsed', discarded, starsLeft: room.stars });
     if (allHandsEmpty(room)) completeLevel(room);
   }
+}
+
+function doConcentrate(room, player) {
+  // Rate limit: ignore while any pause or vote is already active.
+  if (room.phase !== 'playing') fail('You can only call for concentration during play');
+  if (room.vote) fail('A star vote is in progress');
+  room.phase = 'readyCheck';
+  room.readyReason = 'concentrate';
+  room.concentratorId = player.id;
+  for (const p of room.players) p.ready = false;
+  emit(room, { kind: 'concentrate', playerId: player.id, name: player.name });
+}
+
+function doEmote(room, player, emote) {
+  if (!EMOTES.includes(emote)) fail('That emote is not allowed');
+  if (room.phase === 'lobby') fail('Emotes are for the game table');
+  const now = Date.now();
+  if (now - player.lastEmoteAt < EMOTE_COOLDOWN_MS) fail('Easy there — one emote per second');
+  player.lastEmoteAt = now;
+  // Cosmetic only: broadcast and move on, never touching game state.
+  emit(room, { kind: 'emote', playerId: player.id, name: player.name, emote });
 }
 
 function doNextLevel(room, player) {
@@ -452,6 +498,8 @@ function doPlayAgain(room, player) {
     room.readyReason = null;
     room.level = 0;
     room.pile = [];
+    room.history = [];
+    room.concentratorId = null;
     emit(room, { kind: 'backToLobby' });
   } else {
     startGame(room);
@@ -513,8 +561,10 @@ function handleMessage(ws, msg) {
     case 'start': doStart(room, player); break;
     case 'ready': doReady(room, player); break;
     case 'playCard': doPlayCard(room, player); break;
-    case 'proposeShuriken': doProposeShuriken(room, player); break;
-    case 'voteShuriken': doVoteShuriken(room, player, msg.agree === true); break;
+    case 'proposeStar': doProposeStar(room, player); break;
+    case 'voteStar': doVoteStar(room, player, msg.agree === true); break;
+    case 'concentrate': doConcentrate(room, player); break;
+    case 'emote': doEmote(room, player, msg.emote); break;
     case 'nextLevel': doNextLevel(room, player); break;
     case 'playAgain': doPlayAgain(room, player); break;
     default: fail('Unknown action');
@@ -545,7 +595,7 @@ function handleDisconnect(ws) {
     player.ready = false;
     if (room.vote) {
       room.vote = null;
-      emit(room, { kind: 'shurikenDeclined', name: player.name, reason: 'disconnect' });
+      emit(room, { kind: 'starDeclined', name: player.name, reason: 'disconnect' });
     }
     emit(room, { kind: 'playerDisconnected', name: player.name });
   }

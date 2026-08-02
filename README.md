@@ -8,6 +8,16 @@ in a browser, joins the same room code, and plays together while talking on the 
 - Server-authoritative: nobody can peek at another player's cards, even with devtools
 - Reconnect-safe: drop off the wifi, reopen the page, and you're back in your seat
 - No accounts, no build step, one tiny dependency (`ws`)
+- Pick an **emoji avatar** (🦊 🐼 🐸 …) shown next to your name everywhere
+- Opponents' hands rendered as **fanned face-down card backs** (Hearthstone-style) —
+  you see how many they hold, never what
+- A **play history** under the pile shows everything played this level, in order,
+  with face-up discards visually distinct
+- **Drag** your lowest card onto the pile to play it (mouse or touch), or just click
+- **🧘 Concentrate**: anyone can pause the game for a "hands on the table" regroup —
+  play resumes when everyone is ready again
+- **Emotes**: high-five 🙌, 👏, 🔥, 😱 … float up from a player's seat without
+  interrupting play
 
 ## Run it locally
 
@@ -69,10 +79,10 @@ All three give you HTTPS, which the app automatically uses for secure WebSockets
 - Only your **lowest** card is ever playable.
 - Play too early (someone still holds a lower card) → the team loses a life, all lower
   cards are auto-discarded face-up, and everyone re-readies before play resumes.
-- **Shuriken (★):** anyone can propose one; if *everyone* agrees, each player throws
+- **Star (★):** anyone can propose one; if *everyone* agrees, each player throws
   away their lowest card face-up.
 - Levels to win: 2 players → 12, 3 players → 10, 4+ players → 8.
-  Starting lives = player count (max 4); 1 starting shuriken.
+  Starting lives = player count (max 4); 1 starting star.
 - Completing a level grants: level 2 → +1★, 3 → +1❤, 5 → +1★, 6 → +1❤, 8 → +1★, 9 → +1❤.
 - Lives at 0 → game over. Clear the last level → you are one mind. 🏆
 
@@ -91,7 +101,10 @@ npm start &          # terminal 1
 npm test             # terminal 2 (URL=ws://host:port to point elsewhere)
 ```
 
-The simulation covers room create/join, ready checks, in-order play, a forced mistake
-(life loss + face-up auto-discard + re-ready pause), declined and unanimous shuriken
-votes, level rewards, disconnect → pause → token reconnect, and verifies that no
-client ever receives another player's card values.
+The simulation covers room create/join (avatar pick, validation, and random default),
+ready checks, in-order play, the play history (plays vs face-up discards), a forced
+mistake (life loss + face-up auto-discard + re-ready pause), declined and unanimous
+star votes, level rewards, concentrate pauses (blocked plays + spam protection),
+emotes (broadcast, per-player rate limit, allowed-set validation), disconnect →
+pause → token reconnect, and verifies that no client ever receives another player's
+card values.

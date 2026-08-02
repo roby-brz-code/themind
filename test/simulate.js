@@ -5,10 +5,11 @@
  * Usage: start the server (`npm start`), then `node test/simulate.js`
  * (or set URL=ws://host:port).
  *
- * Covers: create/join room, start, ready-check, playing a level in order,
- * a forced mistake (life loss + auto-discard + re-ready), a unanimous shuriken,
- * level rewards, disconnect/pause/reconnect via session token, and the
- * anti-cheat guarantee that other players' card values are never sent.
+ * Covers: create/join room (with avatars), start, ready-check, playing a level
+ * in order, a forced mistake (life loss + auto-discard + re-ready), a unanimous
+ * star, level rewards, the play history, concentrate pauses, emotes (broadcast,
+ * rate limit, validation), disconnect/pause/reconnect via session token, and
+ * the anti-cheat guarantee that other players' card values are never sent.
  */
 
 const WebSocket = require('ws');
@@ -16,6 +17,9 @@ const assert = require('assert');
 
 const URL = process.env.URL || 'ws://localhost:3000';
 const STEP_TIMEOUT = 8000;
+
+// Must match the server's allowed avatar set.
+const AVATARS = ['🦊', '🐼', '🐸', '🦉', '🐙', '🦄', '🐯', '🐨', '🐺', '🦁', '🐵', '🐹'];
 
 let checks = 0;
 function ok(cond, label) {
@@ -147,7 +151,7 @@ async function main() {
   const clients = [alice, bob, carol];
 
   await alice.connect();
-  alice.send({ type: 'create', name: 'Alice' });
+  alice.send({ type: 'create', name: 'Alice', avatar: '🦊' });
   await alice.until((s) => s.phase === 'lobby', 'Alice in lobby');
   const code = alice.state.code;
   ok(/^[A-HJ-NP-Z2-9]{5}$/.test(code), `room code "${code}" is 5 unambiguous chars`);
@@ -155,11 +159,23 @@ async function main() {
 
   await bob.connect();
   await carol.connect();
-  bob.send({ type: 'join', code: code.toLowerCase(), name: 'Bob' }); // lowercase code should work
-  carol.send({ type: 'join', code, name: 'Carol' });
+  // Lowercase code should work; Bob's bogus avatar must be replaced server-side.
+  bob.send({ type: 'join', code: code.toLowerCase(), name: 'Bob', avatar: '💩' });
+  carol.send({ type: 'join', code, name: 'Carol' }); // no avatar → random one assigned
   await everyone(clients, (s) => s.players.length === 3, 'all three in lobby');
   ok(alice.state.players.filter((p) => p.isHost).length === 1 &&
      alice.state.players.find((p) => p.isHost).name === 'Alice', 'Alice is the only host');
+
+  // ---------- avatars ----------
+  const pAlice = alice.state.players.find((p) => p.name === 'Alice');
+  const pBob = alice.state.players.find((p) => p.name === 'Bob');
+  const pCarol = alice.state.players.find((p) => p.name === 'Carol');
+  ok(pAlice.avatar === '🦊', 'chosen avatar is stored and echoed in state');
+  ok(pBob.avatar !== '💩' && AVATARS.includes(pBob.avatar),
+    `invalid avatar replaced with one from the allowed set (${pBob.avatar})`);
+  ok(AVATARS.includes(pCarol.avatar), `missing avatar defaults to one from the allowed set (${pCarol.avatar})`);
+  ok(bob.state.players.find((p) => p.name === 'Alice').avatar === '🦊',
+    'every client sees the same avatars');
 
   // Duplicate name rejected
   const dup = new Client('Dup');
@@ -177,7 +193,7 @@ async function main() {
   console.log('\n2. Game start, ready check, level 1');
   alice.send({ type: 'start' });
   await everyone(clients, (s) => s.phase === 'readyCheck' && s.level === 1, 'level 1 ready check');
-  ok(alice.state.lives === 3 && alice.state.shurikens === 1, '3 players → 3 lives, 1 shuriken');
+  ok(alice.state.lives === 3 && alice.state.stars === 1, '3 players → 3 lives, 1 star');
   ok(alice.state.totalLevels === 10, '3 players → 10 levels to win');
   ok(alice.state.hand === null && alice.state.handCount === 1, 'cards hidden until everyone is ready');
 
@@ -195,6 +211,10 @@ async function main() {
   await everyone(clients, (s) => s.phase === 'levelComplete', 'level 1 complete');
   ok(alice.state.lives === 3, 'no lives lost on a clean level');
   ok(alice.state.lastReward === null, 'level 1 grants no reward');
+  const h1 = alice.state.history;
+  ok(h1.length === 3 && h1.every((h) => h.kind === 'played') &&
+     h1.every((h, i) => i === 0 || h.card > h1[i - 1].card),
+    `history shows all 3 plays in order (${h1.map((h) => h.card).join(', ')})`);
 
   // Non-host cannot deal next level
   bob.send({ type: 'nextLevel' });
@@ -224,6 +244,9 @@ async function main() {
   ok(JSON.stringify(faceUp) === JSON.stringify(expectedDiscards),
     `all cards lower than ${playedCard} auto-discarded face-up (${faceUp.join(', ')})`);
   ok(alice.state.pile[alice.state.pile.length - 1] === playedCard, 'the mistaken card stays on the pile');
+  const histDiscards = alice.state.history.filter((h) => h.kind === 'discard').map((h) => h.card).sort((a, b) => a - b);
+  ok(JSON.stringify(histDiscards) === JSON.stringify(expectedDiscards),
+    'mistake discards appear in the play history, marked as discards');
   const mistakeEv = alice.state.events.find((e) => e.kind === 'mistake');
   ok(mistakeEv && mistakeEv.card === playedCard, 'mistake event broadcast to everyone');
 
@@ -254,52 +277,96 @@ async function main() {
   console.log('\n5. Finish level 2 — completion reward');
   await playOutLevel(players2);
   await everyone(players2, (s) => s.phase === 'levelComplete', 'level 2 complete');
-  ok(alice.state.lastReward === 'shuriken', 'completing level 2 rewards a shuriken');
-  ok(alice.state.shurikens === 2, 'shuriken count now 2 (1 start + level-2 reward)');
+  ok(alice.state.lastReward === 'star', 'completing level 2 rewards a star');
+  ok(alice.state.stars === 2, 'star count now 2 (1 start + level-2 reward)');
   ok(alice.state.lives === 2, 'lives still 2 (3 start − 1 mistake)');
 
-  // ---------- level 3: shurikens (declined + unanimous) + reward check ----------
-  console.log('\n6. Level 3 — declined shuriken, then unanimous shuriken');
+  // ---------- level 3: stars (declined + unanimous) + reward check ----------
+  console.log('\n6. Level 3 — declined star, then unanimous star');
   alice.send({ type: 'nextLevel' });
   await readyAll(players2, 'level 3');
   ok(players2.every((c) => c.hand.length === 3), 'level 3: everyone has 3 cards');
 
-  bob2.send({ type: 'proposeShuriken' });
-  await everyone(players2, (s) => !!s.vote, 'shuriken vote visible to everyone');
-  carol.send({ type: 'voteShuriken', agree: false });
+  bob2.send({ type: 'proposeStar' });
+  await everyone(players2, (s) => !!s.vote, 'star vote visible to everyone');
+  carol.send({ type: 'voteStar', agree: false });
   await everyone(players2, (s) => !s.vote, 'a single decline cancels the vote');
-  ok(alice.state.shurikens === 2, 'declined vote does not consume the shuriken');
+  ok(alice.state.stars === 2, 'declined vote does not consume the star');
 
-  const shurikensBefore = alice.state.shurikens;
+  const starsBefore = alice.state.stars;
   const expectedLowest = players2.filter((c) => c.hand.length).map((c) => c.hand[0]).sort((a, b) => a - b);
   const discardsBefore = alice.state.players.flatMap((p) => p.discards).length;
 
-  alice.send({ type: 'proposeShuriken' });
-  await everyone(players2, (s) => !!s.vote, 'second shuriken vote opened');
+  alice.send({ type: 'proposeStar' });
+  await everyone(players2, (s) => !!s.vote, 'second star vote opened');
   // A vote in progress blocks card plays.
   carol.send({ type: 'playCard' });
-  ok(/vote/i.test((await carol.waitError('play during vote')).message), 'cannot play a card during a shuriken vote');
+  ok(/vote/i.test((await carol.waitError('play during vote')).message), 'cannot play a card during a star vote');
 
-  bob2.send({ type: 'voteShuriken', agree: true });
-  carol.send({ type: 'voteShuriken', agree: true });
-  await everyone(players2, (s) => s.shurikens === shurikensBefore - 1, 'shuriken consumed after unanimous vote');
+  bob2.send({ type: 'voteStar', agree: true });
+  carol.send({ type: 'voteStar', agree: true });
+  await everyone(players2, (s) => s.stars === starsBefore - 1, 'star consumed after unanimous vote');
   const discardsAfter = alice.state.players.flatMap((p) => p.discards).length;
   ok(discardsAfter - discardsBefore === expectedLowest.length,
     'every player with cards discarded exactly one card');
-  const shEv = alice.state.events.find((e) => e.kind === 'shurikenUsed');
+  const shEv = alice.state.events.find((e) => e.kind === 'starUsed');
   const thrown = shEv.discarded.map((d) => d.card).sort((a, b) => a - b);
   ok(JSON.stringify(thrown) === JSON.stringify(expectedLowest),
-    `shuriken threw exactly the lowest cards, face-up (${thrown.join(', ')})`);
+    `star threw exactly the lowest cards, face-up (${thrown.join(', ')})`);
   ok(players2.every((c) => !c.state.vote), 'vote cleared after use');
-  ok(players2.every((c) => c.hand.length === 2), 'everyone has 2 cards left after the shuriken');
+  ok(players2.every((c) => c.hand.length === 2), 'everyone has 2 cards left after the star');
+  const starDiscardsInHistory = alice.state.history.filter((h) => h.kind === 'discard').map((h) => h.card).sort((a, b) => a - b);
+  ok(JSON.stringify(starDiscardsInHistory) === JSON.stringify(expectedLowest),
+    'star discards appear in the play history, marked as discards');
 
-  console.log('\n7. Finish level 3 — life reward');
+  // ---------- concentrate ----------
+  console.log('\n7. Concentrate — pause + re-ready, spam protected');
+  bob2.send({ type: 'concentrate' });
+  await everyone(players2, (s) => s.phase === 'readyCheck' && s.readyReason === 'concentrate',
+    'concentrate triggers a hands-on-the-table pause for everyone');
+  ok(alice.state.concentratorId === bob2.state.you, 'state says who asked for the pause');
+  const concEv = alice.state.events.find((e) => e.kind === 'concentrate');
+  ok(concEv && concEv.name === 'Bob', 'concentrate event broadcast to everyone');
+
+  carol.send({ type: 'playCard' });
+  ok(/only play cards during a level/i.test((await carol.waitError('play during concentrate')).message),
+    'plays are blocked during a concentrate pause');
+  alice.send({ type: 'concentrate' });
+  ok(/during play/i.test((await alice.waitError('concentrate while paused')).message),
+    'concentrate is rejected while a pause is already active (no spam)');
+
+  alice.send({ type: 'ready' });
+  bob2.send({ type: 'ready' });
+  await everyone(players2, (s) => s.players.filter((p) => p.ready).length === 2, 'two of three ready');
+  ok(alice.state.phase === 'readyCheck', 'play stays paused until EVERYONE is ready');
+  carol.send({ type: 'ready' });
+  await everyone(players2, (s) => s.phase === 'playing', 'play resumes once all players are ready');
+  ok(alice.state.concentratorId === null, 'concentrate pause fully cleared on resume');
+
+  // ---------- emotes ----------
+  console.log('\n8. Emotes — broadcast, rate limit, validation');
+  carol.send({ type: 'emote', emote: '🙌' });
+  await everyone(players2, (s) => s.events.some((e) => e.kind === 'emote' && e.emote === '🙌'),
+    'emote broadcast to every player');
+  const emoteEv = alice.state.events.find((e) => e.kind === 'emote');
+  ok(emoteEv.playerId === carol.state.you && emoteEv.name === 'Carol', 'emote is attributed to its sender');
+  ok(alice.state.phase === 'playing', 'emotes do not interrupt play');
+
+  carol.send({ type: 'emote', emote: '🎉' }); // immediately again → rate limited
+  ok(/one emote per second/i.test((await carol.waitError('emote rate limit')).message),
+    'emotes are rate-limited to 1 per second per player');
+  await sleep(1100);
+  carol.send({ type: 'emote', emote: '💣' });
+  ok(/not allowed/i.test((await carol.waitError('invalid emote')).message),
+    'emotes outside the allowed set are rejected');
+
+  console.log('\n9. Finish level 3 — life reward');
   await playOutLevel(players2);
   await everyone(players2, (s) => s.phase === 'levelComplete', 'level 3 complete');
   ok(alice.state.lastReward === 'life' && alice.state.lives === 3, 'completing level 3 rewards +1 life');
 
   // ---------- anti-cheat ----------
-  console.log('\n8. Information hiding');
+  console.log('\n10. Information hiding');
   for (const c of players2) ok(!c.leakDetected, `${c.name} never received another player's card values (${c.leakDetected || 'clean'})`);
 
   for (const c of players2) c.ws.close();

@@ -18,6 +18,10 @@
         <span>Your name</span>
         <input id="name-input" type="text" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam">
       </label>
+      <div class="field">
+        <span>Your avatar</span>
+        <div id="avatar-picker" class="avatar-picker" role="radiogroup" aria-label="Pick an avatar"></div>
+      </div>
       <button id="btn-create" class="btn btn-primary btn-big">Create a room</button>
       <div class="divider"><span>or join a friend's room</span></div>
       <div class="join-row">
@@ -60,7 +64,7 @@
       </div>
       <div class="hud-right">
         <span id="hud-lives" class="hud-chip hud-lives" title="Lives"></span>
-        <span id="hud-shurikens" class="hud-chip hud-shurikens" title="Shurikens"></span>
+        <span id="hud-stars" class="hud-chip hud-stars" title="Stars"></span>
       </div>
     </header>
 
@@ -69,6 +73,7 @@
       <div id="pile-area">
         <div id="pile"><div class="pile-slot">1–100</div></div>
         <div id="pile-caption" class="muted-text"></div>
+        <div id="pile-history" class="pile-history"></div>
       </div>
       <div id="pause-banner" class="pause-banner hidden"></div>
     </div>
@@ -77,7 +82,9 @@
       <div id="my-discards" class="discard-row"></div>
       <div id="hand"></div>
       <div id="action-bar">
-        <button id="btn-shuriken" class="btn btn-shuriken hidden">★ Propose shuriken</button>
+        <button id="btn-star" class="btn btn-star hidden">★ Propose star</button>
+        <button id="btn-concentrate" class="btn btn-concentrate hidden">🧘 Concentrate</button>
+        <div id="emote-bar" class="emote-bar hidden"></div>
         <span class="honor-note">🎥 Talk all you want — <b>never about your numbers</b></span>
       </div>
     </div>
@@ -93,10 +100,10 @@
       </div>
     </div>
 
-    <!-- Shuriken vote modal -->
+    <!-- Star vote modal -->
     <div id="overlay-vote" class="overlay hidden">
       <div class="overlay-panel">
-        <h2>★ Shuriken proposed</h2>
+        <h2>★ Star proposed</h2>
         <p id="vote-text"></p>
         <p class="muted-text">If everyone agrees, each player throws away their lowest card face-up.</p>
         <ul id="vote-list" class="ready-list"></ul>
