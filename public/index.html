@@ -9,6 +9,45 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <!-- Ambient theme decorations (fixed, pointer-through, behind the UI).
+       Which set shows is driven purely by body[data-theme] in CSS. -->
+  <div id="theme-decor" aria-hidden="true">
+    <div class="decor decor-beach">
+      <div class="beach-cloud c1"></div>
+      <div class="beach-cloud c2"></div>
+      <div class="sea-shimmer"></div>
+      <div class="sand-grain"></div>
+      <!-- A little souvenir planted in the sand. Try clicking it. -->
+      <span id="croatia-flag" title="Pozdrav!">
+        <svg viewBox="0 0 30 44" width="30" height="44" xmlns="http://www.w3.org/2000/svg">
+          <g class="flag-cloth">
+            <rect x="15" y="4" width="14" height="3.4" fill="#e03c31"/>
+            <rect x="15" y="7.4" width="14" height="3.4" fill="#f5f3ee"/>
+            <rect x="15" y="10.8" width="14" height="3.4" fill="#1e4b9b"/>
+            <g>
+              <rect x="19.6" y="6.2" width="4.8" height="4.2" rx="0.7" fill="#f5f3ee" stroke="#c8b273" stroke-width="0.35"/>
+              <rect x="19.6" y="6.2" width="1.2" height="1.05" fill="#e03c31"/>
+              <rect x="22" y="6.2" width="1.2" height="1.05" fill="#e03c31"/>
+              <rect x="20.8" y="7.25" width="1.2" height="1.05" fill="#e03c31"/>
+              <rect x="23.2" y="7.25" width="1.2" height="1.05" fill="#e03c31"/>
+              <rect x="19.6" y="8.3" width="1.2" height="1.05" fill="#e03c31"/>
+              <rect x="22" y="8.3" width="1.2" height="1.05" fill="#e03c31"/>
+              <rect x="20.8" y="9.35" width="1.2" height="1.05" fill="#e03c31"/>
+              <rect x="23.2" y="9.35" width="1.2" height="1.05" fill="#e03c31"/>
+            </g>
+          </g>
+          <rect x="13.6" y="2.5" width="1.7" height="39" rx="0.85" fill="#8a6a44"/>
+          <circle cx="14.45" cy="2.6" r="1.6" fill="#d9a94f"/>
+          <ellipse cx="14.45" cy="42" rx="7" ry="2" fill="rgba(120,80,30,0.35)"/>
+        </svg>
+      </span>
+    </div>
+    <div class="decor decor-night">
+      <div class="night-stars"></div>
+      <div class="night-moon"></div>
+    </div>
+  </div>
+
   <!-- ============ HOME ============ -->
   <section id="screen-home" class="screen">
     <div class="home-card">
@@ -46,6 +85,7 @@
       <p id="lobby-hint" class="muted-text"></p>
       <button id="btn-start" class="btn btn-primary btn-big hidden">Start game</button>
       <button id="btn-stats-lobby" class="btn btn-ghost btn-small">📊 Room stats</button>
+      <button id="btn-theme-lobby" class="btn btn-ghost btn-small">🎨 Theme</button>
       <div class="rules-box">
         <h3>How it works</h3>
         <p>Everyone's cards (1–100) must hit the pile in <b>ascending order</b> — with no turns and
@@ -67,6 +107,7 @@
         <span id="hud-lives" class="hud-chip hud-lives" title="Lives"></span>
         <span id="hud-stars" class="hud-chip hud-stars" title="Stars"></span>
         <button id="btn-stats" class="hud-chip hud-btn" title="Room stats">📊</button>
+        <button id="btn-theme" class="hud-chip hud-btn" title="Table theme">🎨</button>
       </div>
     </header>
 
@@ -159,9 +200,19 @@
   <!-- Stats panel: available from the lobby, mid-game HUD, and end screens -->
   <div id="overlay-stats" class="overlay hidden">
     <div class="overlay-panel stats-panel">
-      <h2>📊 Tavern ledger</h2>
+      <h2 id="stats-title">📊 Tavern ledger</h2>
       <div id="stats-body"></div>
       <button id="btn-stats-close" class="btn btn-secondary btn-small">Close</button>
+    </div>
+  </div>
+
+  <!-- Theme picker: a room-level setting — everyone at the table shares it -->
+  <div id="overlay-theme" class="overlay hidden">
+    <div class="overlay-panel theme-panel">
+      <h2>🎨 Table theme</h2>
+      <p class="muted-text">Set the scene — everyone at the table sees it.</p>
+      <div id="theme-options" class="theme-options"></div>
+      <button id="btn-theme-close" class="btn btn-secondary btn-small">Close</button>
     </div>
   </div>
 

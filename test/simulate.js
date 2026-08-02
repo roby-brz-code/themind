@@ -11,8 +11,9 @@
  * never blocks play), emotes (broadcast, rate limit, validation), disconnect/
  * pause/reconnect via session token, room statistics (mistake attribution,
  * reaction times, getStats, play-again keeping all-time but resetting the
- * this-game section), and the anti-cheat guarantee that other players' card
- * values are never sent.
+ * this-game section), room themes (default, any-player change, broadcast,
+ * validation, persistence across levels and play-again), and the anti-cheat
+ * guarantee that other players' card values are never sent.
  */
 
 const WebSocket = require('ws');
@@ -404,10 +405,37 @@ async function main() {
   ok(/not allowed/i.test((await carol.waitError('invalid emote')).message),
     'emotes outside the allowed set are rejected');
 
+  // ---------- themes (room-level, cosmetic, synced) ----------
+  console.log('\n8b. Themes — synced to everyone, validated, cosmetic only');
+  ok(players2.every((c) => c.state.theme === 'tavern'), 'rooms default to the tavern theme');
+  const handsBeforeTheme = players2.map((c) => c.hand.join(','));
+  const pileBeforeTheme = alice.state.pileCount;
+  bob2.send({ type: 'setTheme', theme: 'beach' });
+  await everyone(players2, (s) => s.theme === 'beach', 'theme change broadcast to every player');
+  const themeEv = alice.state.events.find((e) => e.kind === 'themeChanged');
+  ok(themeEv && themeEv.name === 'Bob' && themeEv.theme === 'beach',
+    'themeChanged event attributed to the player who picked it (any player, not just the host)');
+  ok(alice.state.phase === 'playing' && alice.state.pileCount === pileBeforeTheme &&
+     players2.every((c, i) => c.hand.join(',') === handsBeforeTheme[i]),
+    'changing the theme never touches game state');
+  carol.send({ type: 'setTheme', theme: 'disco' });
+  ok(/not available/i.test((await carol.waitError('invalid theme')).message),
+    'themes outside the allowed set are rejected');
+  ok(players2.every((c) => c.state.theme === 'beach'), 'an invalid theme leaves the room theme unchanged');
+
+  // Creating a room with a preferred theme (the client remembers the last one).
+  const dara = new Client('Dara');
+  await dara.connect();
+  dara.send({ type: 'create', name: 'Dara', theme: 'night' });
+  await dara.until((s) => s.phase === 'lobby', 'Dara in her own lobby');
+  ok(dara.state.theme === 'night', 'create honors the creator\'s preferred theme');
+  dara.ws.close();
+
   console.log('\n9. Finish level 3 — life reward');
   await playOutLevel(players2);
   await everyone(players2, (s) => s.phase === 'levelComplete', 'level 3 complete');
   ok(alice.state.lastReward === 'life' && alice.state.lives === 3, 'completing level 3 rewards +1 life');
+  ok(alice.state.theme === 'beach', 'the theme persists across level transitions');
 
   // ---------- stats: emotes/stars counted, game over, play-again ----------
   console.log('\n10. Stats — counters, game history, play-again keeps all-time');
@@ -469,6 +497,7 @@ async function main() {
      sum(st3.allTime.players, 'mistakes') === 4 && st3.allTime.gamesPlayed === 1,
     'play-again keeps the room all-time stats and history');
   ok(!JSON.stringify(st3).includes('"hand"'), 'stats stay leak-free after play-again');
+  ok(carol.state.theme === 'beach', 'the theme persists across game over and play-again');
 
   // ---------- anti-cheat ----------
   console.log('\n11. Information hiding');

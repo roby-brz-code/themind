@@ -1,20 +1,15 @@
-/* ============ The Mind — warm tavern-table theme ============ */
+/* ============ The Mind — themed table (tavern / beach / starry night) ============
+   THEME SYSTEM: the WORLD (table surface, ambient light, plaques, mats, panels,
+   HUD skins, accents) is driven by CSS custom properties defined on <body> and
+   overridden per `body[data-theme="…"]`. The CARDS (faces, backs, sizes,
+   animations) intentionally use fixed values and stay identical in every theme. */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --tavern-black: #140b04;
-  --wood-dark: #2c1a0d;
-  --wood-mid: #4b2d16;
-  --wood-light: #6d431f;
-  --panel: #2b1a0c;
-  --panel-edge: rgba(226, 178, 88, 0.28);
-  --ink: #f4e8ce;
-  --ink-dim: #c4a678;
+  /* ---- theme-independent: cards, geometry, shared textures ---- */
   --gold: #e8b64c;
   --gold-bright: #ffd98a;
-  --ember: #ffab52;
-  --danger: #ff8273;
   --teal-deep: #0d3a3f;
   --card-face: #f6ecd2;
   --card-ink: #3c2a12;
@@ -25,19 +20,34 @@
   --hand-h: 248px;
   /* Warm wood-grain noise (inline SVG, no external assets). */
   --wood-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='340' height='340'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.13 0.02' numOctaves='4' seed='11'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.70 0 0 0 0 0.42 0 0 0 0.18 0'/%3E%3C/filter%3E%3Crect width='340' height='340' filter='url(%23g)'/%3E%3C/svg%3E");
+  /* Fine sand speckle for the beach theme. */
+  --sand-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.42 0 0 0 0 0.30 0 0 0 0 0.13 0 0 0 0.10 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23s)'/%3E%3C/svg%3E");
+  /* Scattered stars for the night theme (tiled). */
+  --star-field: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cg fill='white'%3E%3Ccircle cx='12' cy='31' r='1' opacity='.8'/%3E%3Ccircle cx='48' cy='9' r='.7' opacity='.5'/%3E%3Ccircle cx='83' cy='44' r='1.2' opacity='.9'/%3E%3Ccircle cx='131' cy='17' r='.8' opacity='.6'/%3E%3Ccircle cx='167' cy='53' r='.6' opacity='.45'/%3E%3Ccircle cx='203' cy='11' r='1' opacity='.75'/%3E%3Ccircle cx='241' cy='39' r='.7' opacity='.55'/%3E%3Ccircle cx='27' cy='84' r='.7' opacity='.5'/%3E%3Ccircle cx='69' cy='109' r='1' opacity='.7'/%3E%3Ccircle cx='118' cy='76' r='.6' opacity='.5'/%3E%3Ccircle cx='152' cy='121' r='1.1' opacity='.85'/%3E%3Ccircle cx='196' cy='92' r='.7' opacity='.5'/%3E%3Ccircle cx='232' cy='128' r='.9' opacity='.65'/%3E%3Ccircle cx='9' cy='143' r='1' opacity='.7'/%3E%3Ccircle cx='55' cy='168' r='.6' opacity='.45'/%3E%3Ccircle cx='99' cy='151' r='.9' opacity='.7'/%3E%3Ccircle cx='143' cy='187' r='.6' opacity='.5'/%3E%3Ccircle cx='181' cy='159' r='1' opacity='.75'/%3E%3Ccircle cx='225' cy='181' r='.7' opacity='.55'/%3E%3Ccircle cx='34' cy='211' r='.9' opacity='.65'/%3E%3Ccircle cx='87' cy='238' r='.7' opacity='.5'/%3E%3Ccircle cx='137' cy='224' r='1' opacity='.75'/%3E%3Ccircle cx='189' cy='243' r='.6' opacity='.45'/%3E%3Ccircle cx='247' cy='219' r='1.1' opacity='.8'/%3E%3C/g%3E%3C/svg%3E");
   /* Decorative card back: teal field, gold filigree, central star. */
   --card-back-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 84'%3E%3Cdefs%3E%3CradialGradient id='g' cx='50%25' cy='38%25' r='80%25'%3E%3Cstop offset='0' stop-color='%23186068'/%3E%3Cstop offset='1' stop-color='%23092226'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='60' height='84' rx='6' fill='url(%23g)'/%3E%3Crect x='2.2' y='2.2' width='55.6' height='79.6' rx='4.5' fill='none' stroke='%23d9a94f' stroke-width='1.6'/%3E%3Crect x='5.5' y='5.5' width='49' height='73' rx='3' fill='none' stroke='%23d9a94f' stroke-width='0.6' opacity='0.65'/%3E%3Cg fill='none' stroke='%23d9a94f' stroke-width='0.5' opacity='0.3'%3E%3Cpath d='M5.5 21 L30 6 L54.5 21 M5.5 63 L30 78 L54.5 63'/%3E%3Cpath d='M5.5 34 L30 19 L54.5 34 M5.5 50 L30 65 L54.5 50'/%3E%3C/g%3E%3Ccircle cx='30' cy='42' r='13.5' fill='none' stroke='%23d9a94f' stroke-width='0.9' opacity='0.85'/%3E%3Ccircle cx='30' cy='42' r='16' fill='none' stroke='%23d9a94f' stroke-width='0.45' opacity='0.5'/%3E%3Cpath d='M30 31.5 L32.9 38.9 L40.8 39.3 L34.7 44.4 L36.7 52.1 L30 47.8 L23.3 52.1 L25.3 44.4 L19.2 39.3 L27.1 38.9 Z' fill='%23e8b64c'/%3E%3Cg fill='%23d9a94f' opacity='0.8'%3E%3Ccircle cx='11' cy='12' r='1.4'/%3E%3Ccircle cx='49' cy='12' r='1.4'/%3E%3Ccircle cx='11' cy='72' r='1.4'/%3E%3Ccircle cx='49' cy='72' r='1.4'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 html, body { height: 100%; }
 
-/* The whole page is a wooden tavern table under candle light:
-   glow + vignette + grain + plank seams + base wood gradient. */
+/* =====================================================================
+   THEME: tavern (default) — a wooden tavern table under candle light
+   ===================================================================== */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: var(--ink);
-  background-color: var(--wood-dark);
-  background-image:
+  /* world text + accents */
+  --ink: #f4e8ce;
+  --ink-dim: #c4a678;
+  --ink-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  --accent: #e8b64c;
+  --accent-bright: #ffd98a;
+  --danger: #ff8273;
+  --panel-edge: rgba(226, 178, 88, 0.28);
+  --well-bg: rgba(0, 0, 0, 0.28);
+  --well-edge: rgba(226, 178, 88, 0.12);
+  --input-bg: rgba(0, 0, 0, 0.38);
+  /* the table itself: glow + vignette + grain + plank seams + base wood */
+  --env-bg-color: #2c1a0d;
+  --env-bg:
     radial-gradient(ellipse 85% 62% at 50% 34%, rgba(255, 176, 76, 0.16), rgba(255, 150, 50, 0) 68%),
     radial-gradient(ellipse 130% 105% at 50% 42%, rgba(0, 0, 0, 0) 42%, rgba(9, 4, 1, 0.88) 100%),
     var(--wood-noise),
@@ -49,13 +59,333 @@ body {
       rgba(0, 0, 0, 0.14) 0 132px,
       rgba(255, 190, 120, 0.045) 132px 264px,
       rgba(0, 0, 0, 0.05) 264px 396px),
-    linear-gradient(180deg, var(--wood-mid) 0%, var(--wood-dark) 70%, #221207 100%);
+    linear-gradient(180deg, #4b2d16 0%, #2c1a0d 70%, #221207 100%);
+  /* HUD chips / toasts / pause banner (dark glass) */
+  --chip-bg: linear-gradient(180deg, rgba(20, 10, 3, 0.75), rgba(10, 5, 2, 0.75));
+  --chip-edge: rgba(226, 178, 88, 0.28);
+  --chip-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 220, 160, 0.1);
+  --chip-ink: #f4e8ce;
+  --chip-ink-dim: #c4a678;
+  --chip-accent: #e8b64c;
+  --chip-accent-bright: #ffd98a;
+  --chip-danger: #ff8273;
+  --toast-bg: rgba(26, 14, 5, 0.96);
+  /* opponent seat plaques (little wooden name boards) */
+  --plaque-bg: var(--wood-noise), linear-gradient(180deg, #573517 0%, #3b2310 100%);
+  --plaque-border: rgba(0, 0, 0, 0.75);
+  --plaque-shadow:
+    inset 0 1px 0 rgba(255, 210, 140, 0.3),
+    inset 0 0 0 1px rgba(226, 178, 88, 0.14),
+    0 8px 18px rgba(0, 0, 0, 0.55);
+  --plaque-ink: #ffe9c0;
+  --plaque-name-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  --plaque-ink-dim: #c4a678;
+  --plaque-ok: #ffd98a;
+  --plaque-danger: #ff8273;
+  /* the pile mat (parchment-and-leather inset in the table center) */
+  --mat-bg:
+    radial-gradient(ellipse at 50% 8%, rgba(255, 190, 90, 0.09), rgba(255, 190, 90, 0) 65%),
+    linear-gradient(180deg, #221105 0%, #180b03 100%);
+  --mat-shadow:
+    inset 0 6px 22px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 0 rgba(255, 210, 140, 0.14),
+    inset 0 0 0 2px rgba(226, 178, 88, 0.16),
+    0 1px 0 rgba(255, 210, 140, 0.12);
+  --mat-ink: #c4a678;
+  --slot-edge: rgba(255, 218, 150, 0.22);
+  --slot-ink: rgba(255, 218, 150, 0.3);
+  /* overlay panels (home / lobby / modals / the ledger) */
+  --panel-bg: var(--wood-noise), linear-gradient(180deg, #3a2310, #291708);
+  --panel-border: rgba(0, 0, 0, 0.7);
+  --panel-shadow: 0 30px 80px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 210, 140, 0.22);
+  --panel-heading: #ffe9c0;
+  --panel-ink: #f4e8ce;
+  --panel-ink-dim: #c4a678;
+  --panel-ink-shadow: none;
+  --panel-accent: #e8b64c;
+  --panel-accent-bright: #ffd98a;
+  --panel-danger: #ff8273;
+  --panel-line: rgba(226, 178, 88, 0.28);
+  --panel-well: rgba(0, 0, 0, 0.28);
+  --panel-well-edge: rgba(226, 178, 88, 0.12);
+  --code-glow: 0 0 30px rgba(255, 190, 80, 0.5), 0 2px 4px rgba(0, 0, 0, 0.7);
+  --overlay-scrim: rgba(14, 7, 2, 0.8);
+  /* concentrate focus-glow ring colors (per-theme so it reads on any bg) */
+  --focus-ring-1: rgba(104, 172, 255, 0.7);
+  --focus-ring-2: rgba(88, 152, 255, 0.45);
+  --focus-green-1: rgba(115, 240, 175, 0.7);
+  --focus-green-2: rgba(95, 225, 160, 0.38);
+}
+
+/* =====================================================================
+   THEME: beach 🏖️ — a sunny seaside afternoon: sky, sea, warm sand
+   ===================================================================== */
+body[data-theme="beach"] {
+  --ink: #3a2a15;
+  --ink-dim: #6d5738;
+  --ink-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  --accent: #b3591b;
+  --accent-bright: #0e7f90;
+  --danger: #b3362a;
+  --panel-edge: rgba(84, 56, 22, 0.35);
+  --well-bg: rgba(255, 255, 255, 0.4);
+  --well-edge: rgba(84, 56, 22, 0.25);
+  --input-bg: rgba(255, 255, 255, 0.55);
+  --env-bg-color: #ecd6a4;
+  --env-bg:
+    /* high sun glow */
+    radial-gradient(ellipse 46% 30% at 76% 4%, rgba(255, 248, 210, 0.95), rgba(255, 248, 210, 0) 62%),
+    /* soft haze at the horizon */
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 12%, rgba(255, 255, 255, 0.35) 16.5%, rgba(255, 255, 255, 0) 18%),
+    /* sky → sea → foam line → dry sand */
+    linear-gradient(180deg,
+      #aee2f6 0%, #90d3ef 9%, #6cc2e6 16.5%,
+      #2ea6cb 17%, #1f93ba 22%, #4fc0cd 26%, #8fdcd9 27%,
+      #f6ead0 28%, #f0dcae 34%,
+      #ecd6a4 55%, #e3c68e 82%, #d8b678 100%);
+  --chip-bg: linear-gradient(180deg, rgba(14, 62, 80, 0.85), rgba(9, 46, 62, 0.85));
+  --chip-edge: rgba(255, 255, 255, 0.3);
+  --chip-shadow: 0 2px 8px rgba(30, 60, 70, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --chip-ink: #eafaff;
+  --chip-ink-dim: #a5d3e0;
+  --chip-accent: #ffd98a;
+  --chip-accent-bright: #ffe9b0;
+  --chip-danger: #ff9a8c;
+  --toast-bg: rgba(9, 48, 62, 0.94);
+  /* driftwood seat plaques */
+  --plaque-bg:
+    var(--wood-noise),
+    linear-gradient(180deg, #cbb590 0%, #a98f68 100%);
+  --plaque-border: rgba(96, 74, 44, 0.65);
+  --plaque-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 0 0 1px rgba(120, 95, 60, 0.25),
+    0 8px 16px rgba(90, 60, 20, 0.3);
+  --plaque-ink: #3c2c16;
+  --plaque-name-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  --plaque-ink-dim: #6b5535;
+  --plaque-ok: #0b6b7a;
+  --plaque-danger: #a63324;
+  /* the pile mat becomes a striped beach towel */
+  --mat-bg:
+    radial-gradient(ellipse at 50% 6%, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 60%),
+    repeating-linear-gradient(0deg,
+      #ef6f5b 0 22px, #fdf1dc 22px 30px,
+      #2f9fb4 30px 52px, #fdf1dc 52px 60px);
+  --mat-shadow:
+    inset 0 0 0 5px rgba(253, 246, 232, 0.75),
+    inset 0 0 26px rgba(120, 45, 20, 0.22),
+    0 12px 26px rgba(95, 60, 15, 0.32);
+  --mat-ink: #4a3319;
+  --slot-bg: rgba(253, 246, 232, 0.55);
+  --slot-edge: rgba(96, 64, 28, 0.55);
+  --slot-ink: rgba(96, 64, 28, 0.8);
+  /* sun-bleached postcard panels */
+  --panel-bg:
+    var(--wood-noise),
+    linear-gradient(180deg, #fdf4de 0%, #f5e4c1 100%);
+  --panel-border: rgba(140, 105, 60, 0.45);
+  --panel-shadow: 0 30px 80px rgba(35, 70, 85, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --panel-heading: #185f6b;
+  --panel-ink: #3b2c16;
+  --panel-ink-dim: #77613f;
+  --panel-ink-shadow: none;
+  --panel-accent: #0d7a8a;
+  --panel-accent-bright: #0a6a78;
+  --panel-danger: #b3362a;
+  --panel-line: rgba(13, 110, 122, 0.4);
+  --panel-well: rgba(13, 110, 122, 0.08);
+  --panel-well-edge: rgba(13, 110, 122, 0.25);
+  --code-glow: 0 1px 0 rgba(255, 255, 255, 0.7);
+  --overlay-scrim: rgba(10, 52, 68, 0.5);
+  /* deeper, saturated glow so it stays visible on the bright sand */
+  --focus-ring-1: rgba(21, 89, 214, 0.8);
+  --focus-ring-2: rgba(24, 105, 224, 0.5);
+  --focus-green-1: rgba(0, 138, 79, 0.8);
+  --focus-green-2: rgba(0, 150, 92, 0.45);
+}
+
+/* =====================================================================
+   THEME: night 🌌 — a starry-sky game night, moonlit blues
+   ===================================================================== */
+body[data-theme="night"] {
+  --ink: #e6edfc;
+  --ink-dim: #93a4c8;
+  --ink-shadow: 0 1px 3px rgba(0, 0, 10, 0.8);
+  --accent: #8fb4ff;
+  --accent-bright: #cfe0ff;
+  --danger: #ff8b9d;
+  --panel-edge: rgba(140, 170, 255, 0.28);
+  --well-bg: rgba(0, 0, 20, 0.35);
+  --well-edge: rgba(140, 170, 255, 0.14);
+  --input-bg: rgba(0, 0, 20, 0.45);
+  --env-bg-color: #0d1428;
+  --env-bg:
+    radial-gradient(circle 140px at 84% 11%, rgba(215, 232, 255, 0.22), rgba(215, 232, 255, 0) 72%),
+    var(--star-field),
+    radial-gradient(ellipse 130% 90% at 50% 118%, rgba(40, 62, 118, 0.55), rgba(0, 0, 0, 0) 62%),
+    linear-gradient(180deg, #131c3a 0%, #0d1530 55%, #070b1a 100%);
+  --chip-bg: linear-gradient(180deg, rgba(12, 20, 44, 0.8), rgba(6, 11, 26, 0.8));
+  --chip-edge: rgba(140, 170, 255, 0.28);
+  --chip-shadow: 0 2px 8px rgba(0, 0, 10, 0.5), inset 0 1px 0 rgba(170, 200, 255, 0.12);
+  --chip-ink: #e6edfc;
+  --chip-ink-dim: #93a4c8;
+  --chip-accent: #8fb4ff;
+  --chip-accent-bright: #cfe0ff;
+  --chip-danger: #ff8b9d;
+  --toast-bg: rgba(10, 16, 36, 0.96);
+  --plaque-bg: linear-gradient(180deg, #233156 0%, #16203e 100%);
+  --plaque-border: rgba(0, 0, 12, 0.8);
+  --plaque-shadow:
+    inset 0 1px 0 rgba(170, 200, 255, 0.28),
+    inset 0 0 0 1px rgba(140, 170, 255, 0.12),
+    0 8px 18px rgba(0, 0, 10, 0.55);
+  --plaque-ink: #dfe9ff;
+  --plaque-name-shadow: 0 1px 2px rgba(0, 0, 10, 0.8);
+  --plaque-ink-dim: #93a4c8;
+  --plaque-ok: #9fe8c0;
+  --plaque-danger: #ff8b9d;
+  --mat-bg:
+    radial-gradient(ellipse at 50% 8%, rgba(170, 200, 255, 0.08), rgba(170, 200, 255, 0) 65%),
+    linear-gradient(180deg, #0d1330 0%, #080c1e 100%);
+  --mat-shadow:
+    inset 0 6px 22px rgba(0, 0, 10, 0.85),
+    inset 0 -1px 0 rgba(170, 200, 255, 0.12),
+    inset 0 0 0 2px rgba(140, 170, 255, 0.18),
+    0 1px 0 rgba(170, 200, 255, 0.1);
+  --mat-ink: #93a4c8;
+  --slot-edge: rgba(190, 210, 255, 0.25);
+  --slot-ink: rgba(190, 210, 255, 0.35);
+  --panel-bg: linear-gradient(180deg, #172142 0%, #0e152e 100%);
+  --panel-border: rgba(0, 0, 12, 0.75);
+  --panel-shadow: 0 30px 80px rgba(0, 0, 10, 0.7), inset 0 1px 0 rgba(170, 200, 255, 0.2);
+  --panel-heading: #dce8ff;
+  --panel-ink: #e6edfc;
+  --panel-ink-dim: #93a4c8;
+  --panel-ink-shadow: none;
+  --panel-accent: #8fb4ff;
+  --panel-accent-bright: #cfe0ff;
+  --panel-danger: #ff8b9d;
+  --panel-line: rgba(140, 170, 255, 0.28);
+  --panel-well: rgba(0, 0, 20, 0.35);
+  --panel-well-edge: rgba(140, 170, 255, 0.14);
+  --code-glow: 0 0 30px rgba(150, 190, 255, 0.5), 0 2px 4px rgba(0, 0, 10, 0.7);
+  --overlay-scrim: rgba(3, 6, 16, 0.82);
+  --focus-ring-1: rgba(120, 185, 255, 0.75);
+  --focus-ring-2: rgba(100, 160, 255, 0.48);
+  --focus-green-1: rgba(125, 245, 185, 0.7);
+  --focus-green-2: rgba(100, 230, 165, 0.4);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink);
+  background-color: var(--env-bg-color);
+  background-image: var(--env-bg);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+}
+
+/* ---------- component var scoping: surfaces re-map the world palette ----------
+   Dark "glass" surfaces (HUD chips, toasts, banner) and light panel surfaces
+   keep their own readable ink even when the world behind them flips brightness. */
+.hud-chip, .toast, .pause-banner {
+  --ink: var(--chip-ink);
+  --ink-dim: var(--chip-ink-dim);
+  --accent: var(--chip-accent);
+  --accent-bright: var(--chip-accent-bright);
+  --danger: var(--chip-danger);
+}
+.home-card, .lobby-card, .overlay-panel {
+  --ink: var(--panel-ink);
+  --ink-dim: var(--panel-ink-dim);
+  --ink-shadow: var(--panel-ink-shadow);
+  --accent: var(--panel-accent);
+  --accent-bright: var(--panel-accent-bright);
+  --danger: var(--panel-danger);
+  --panel-edge: var(--panel-line);
+  --well-bg: var(--panel-well);
+  --well-edge: var(--panel-well-edge);
+  color: var(--ink);
+}
+.opponent {
+  --ink-dim: var(--plaque-ink-dim);
+  --accent-bright: var(--plaque-ok);
+  --danger: var(--plaque-danger);
+}
+
+/* ---------- ambient theme decor (fixed, pointer-through, behind the UI) ---------- */
+#theme-decor { position: fixed; inset: 0; pointer-events: none; }
+#theme-decor .decor { display: none; position: absolute; inset: 0; }
+body[data-theme="beach"] #theme-decor .decor-beach { display: block; }
+body[data-theme="night"] #theme-decor .decor-night { display: block; }
+
+/* Slow clouds drifting across the beach sky — transform-only, very cheap. */
+.beach-cloud {
+  position: absolute; top: 3.5%; left: -260px;
+  width: 150px; height: 34px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    36px -15px 0 6px rgba(255, 255, 255, 0.75),
+    80px -5px 0 2px rgba(255, 255, 255, 0.8),
+    24px 7px 0 4px rgba(255, 255, 255, 0.7);
+  filter: blur(1.5px);
+  opacity: 0.85;
+  animation: cloud-drift 110s linear infinite;
+}
+.beach-cloud.c2 { top: 8.5%; --cs: 0.55; opacity: 0.6; animation-duration: 160s; animation-delay: -70s; }
+@keyframes cloud-drift {
+  from { transform: translateX(0) scale(var(--cs, 1)); }
+  to { transform: translateX(calc(100vw + 520px)) scale(var(--cs, 1)); }
+}
+
+/* Gentle glints sliding on the sea band. */
+.sea-shimmer {
+  position: absolute; left: 0; right: 0; top: 17%; height: 10.5%;
+  background: repeating-linear-gradient(100deg,
+    rgba(255, 255, 255, 0) 0 34px,
+    rgba(255, 255, 255, 0.4) 34px 39px,
+    rgba(255, 255, 255, 0) 39px 96px);
+  opacity: 0.4;
+  animation: shimmer 9s ease-in-out infinite alternate;
+}
+@keyframes shimmer {
+  from { transform: translateX(-34px); opacity: 0.28; }
+  to { transform: translateX(34px); opacity: 0.5; }
+}
+
+/* Sand grain only below the waterline. */
+.sand-grain { position: absolute; left: 0; right: 0; top: 27%; bottom: 0; background: var(--sand-noise); }
+
+/* A tiny flag planted in the sand near the water — a souvenir from a certain
+   holiday. Clicking it says hello. 🇭🇷 */
+#croatia-flag {
+  position: fixed; right: 14px; top: calc(27% - 41px); z-index: 6;
+  pointer-events: auto; cursor: pointer;
+  filter: drop-shadow(0 2px 3px rgba(80, 50, 10, 0.35));
+  transform-origin: 50% 100%;
+  animation: flag-sway 5.5s ease-in-out infinite alternate;
+}
+@keyframes flag-sway { from { transform: rotate(-2deg); } to { transform: rotate(2.5deg); } }
+
+/* Starry-night extras: a soft moon and a slowly twinkling star layer. */
+.night-stars {
+  position: absolute; inset: 0 0 38% 0;
+  background: var(--star-field);
+  background-size: 340px 340px;
+  animation: twinkle 7s ease-in-out infinite alternate;
+}
+@keyframes twinkle { from { opacity: 0.2; } to { opacity: 0.8; } }
+.night-moon {
+  position: absolute; top: 6.5%; right: 9%;
+  width: 72px; height: 72px; border-radius: 50%;
+  background: radial-gradient(circle at 36% 34%, #f6f9ff 0%, #dbe6fb 55%, #b9c9ea 100%);
+  box-shadow: 0 0 44px 12px rgba(200, 220, 255, 0.22), inset -12px -10px 24px rgba(90, 110, 160, 0.45);
+  opacity: 0.9;
 }
 
 .hidden { display: none !important; }
@@ -102,7 +432,7 @@ body {
 }
 .btn-concentrate.holding {
   background: linear-gradient(160deg, #d9a94f, #a97a26);
-  border-color: var(--gold-bright); color: #2c1a04;
+  border-color: #ffd98a; color: #2c1a04;
   box-shadow: 0 0 24px rgba(255, 200, 100, 0.65), inset 0 1px 0 rgba(255, 245, 210, 0.6);
   transform: scale(0.97);
 }
@@ -111,20 +441,18 @@ body {
 /* ---------- home ---------- */
 .home-card {
   width: min(430px, 100%);
-  background:
-    var(--wood-noise),
-    linear-gradient(180deg, #3a2310, #291708);
-  border: 1px solid rgba(0, 0, 0, 0.7);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   outline: 1px solid var(--panel-edge); outline-offset: -5px;
   border-radius: 18px;
   padding: 36px 28px 28px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 210, 140, 0.22);
+  box-shadow: var(--panel-shadow);
   text-align: center;
 }
 .logo {
   font-family: var(--serif);
   font-size: 3.1rem; font-weight: 700; letter-spacing: 0.02em;
-  background: linear-gradient(175deg, #ffe9b0 10%, var(--gold) 55%, #b47c22 95%);
+  background: linear-gradient(175deg, #ffe9b0 10%, #e8b64c 55%, #b47c22 95%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
 }
@@ -133,12 +461,12 @@ body {
 .field span { display: block; font-size: 0.8rem; color: var(--ink-dim); margin-bottom: 6px; }
 input[type="text"] {
   width: 100%; font: inherit; color: var(--ink);
-  background: rgba(0, 0, 0, 0.38);
+  background: var(--input-bg);
   border: 1px solid var(--panel-edge); border-radius: 12px;
   padding: 13px 14px; outline: none;
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.2);
 }
-input[type="text"]:focus { border-color: var(--gold); }
+input[type="text"]:focus { border-color: var(--accent); }
 .divider {
   display: flex; align-items: center; gap: 12px;
   color: var(--ink-dim); font-size: 0.8rem; margin: 22px 0 14px;
@@ -146,19 +474,17 @@ input[type="text"]:focus { border-color: var(--gold); }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--panel-edge); }
 .join-row { display: flex; gap: 10px; }
 .join-row input { flex: 1; text-transform: uppercase; letter-spacing: 0.35em; font-weight: 700; text-align: center; }
-.home-foot { margin-top: 22px; color: var(--ink-dim); font-size: 0.85rem; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+.home-foot { margin-top: 22px; color: var(--ink-dim); font-size: 0.85rem; text-align: center; text-shadow: var(--ink-shadow); }
 
 /* ---------- lobby ---------- */
 .lobby-card {
   width: min(470px, 100%);
-  background:
-    var(--wood-noise),
-    linear-gradient(180deg, #3a2310, #291708);
-  border: 1px solid rgba(0, 0, 0, 0.7);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   outline: 1px solid var(--panel-edge); outline-offset: -5px;
   border-radius: 18px;
   padding: 30px 28px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 210, 140, 0.22);
+  box-shadow: var(--panel-shadow);
   text-align: center;
 }
 .lobby-label { color: var(--ink-dim); font-size: 0.85rem; }
@@ -166,26 +492,26 @@ input[type="text"]:focus { border-color: var(--gold); }
 .room-code {
   font-family: var(--serif);
   font-size: 2.6rem; font-weight: 700; letter-spacing: 0.3em; padding-left: 0.3em;
-  color: var(--gold-bright); text-shadow: 0 0 30px rgba(255, 190, 80, 0.5), 0 2px 4px rgba(0,0,0,0.7);
+  color: var(--accent-bright); text-shadow: var(--code-glow);
 }
 .lobby-players { list-style: none; margin-bottom: 18px; }
 .lobby-players li {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; margin-bottom: 8px;
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(226, 178, 88, 0.12);
+  background: var(--well-bg);
+  border: 1px solid var(--well-edge);
   border-radius: 10px; font-weight: 600; text-align: left;
 }
-.lobby-players .you-tag { color: var(--gold); font-size: 0.75rem; font-weight: 700; }
-.lobby-players .host-tag { margin-left: auto; font-size: 0.8rem; color: var(--gold); }
+.lobby-players .you-tag { color: var(--accent); font-size: 0.75rem; font-weight: 700; }
+.lobby-players .host-tag { margin-left: auto; font-size: 0.8rem; color: var(--accent); }
 .rules-box {
   margin: 22px 0 14px; padding: 16px;
-  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(226, 178, 88, 0.12);
+  background: var(--well-bg); border: 1px solid var(--well-edge);
   border-radius: 12px;
   text-align: left; font-size: 0.88rem; color: var(--ink-dim); line-height: 1.5;
 }
 .rules-box h3 { color: var(--ink); font-family: var(--serif); font-size: 1rem; margin-bottom: 6px; }
-.rules-box b { color: var(--gold); }
+.rules-box b { color: var(--accent); }
 
 /* ---------- game HUD ---------- */
 #screen-game { justify-content: flex-start; padding: 0; overflow: hidden; }
@@ -196,16 +522,17 @@ input[type="text"]:focus { border-color: var(--gold); }
 }
 .hud-left, .hud-right { display: flex; gap: 8px; align-items: center; }
 .hud-chip {
-  background: linear-gradient(180deg, rgba(20, 10, 3, 0.75), rgba(10, 5, 2, 0.75));
-  border: 1px solid var(--panel-edge);
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-edge);
   border-radius: 999px; padding: 6px 14px; font-weight: 700; font-size: 0.9rem;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 220, 160, 0.1);
+  color: var(--ink);
+  box-shadow: var(--chip-shadow);
 }
-.hud-level { color: var(--gold-bright); font-family: var(--serif); }
+.hud-level { color: var(--accent-bright); font-family: var(--serif); }
 .hud-code { color: var(--ink-dim); letter-spacing: 0.15em; font-size: 0.8rem; }
 .hud-lives { color: var(--danger); }
-.hud-stars { color: var(--gold); }
+.hud-stars { color: var(--accent); }
 .hud-lives.bump, .hud-stars.bump { animation: bump 0.6s ease; }
 @keyframes bump { 30% { transform: scale(1.3); } }
 
@@ -220,35 +547,32 @@ input[type="text"]:focus { border-color: var(--gold); }
   display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 46px;
   padding: 6px 12px; z-index: 2;
 }
-/* A seat is a little wooden name plaque with the fan of card backs above it. */
+/* A seat is a little name plaque (wood, driftwood, or midnight slate) with the
+   fan of card backs above it. */
 .opponent {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   min-width: 108px; padding: 10px 14px 8px;
-  background:
-    var(--wood-noise),
-    linear-gradient(180deg, #573517 0%, #3b2310 100%);
-  border: 1px solid rgba(0, 0, 0, 0.75);
+  background: var(--plaque-bg);
+  border: 1px solid var(--plaque-border);
   border-radius: 12px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 210, 140, 0.3),
-    inset 0 0 0 1px rgba(226, 178, 88, 0.14),
-    0 8px 18px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--plaque-shadow);
   transition: opacity 0.3s;
 }
 .opponent.disconnected { opacity: 0.45; }
 .opponent .opp-name {
   font-family: var(--serif); font-weight: 700; font-size: 0.95rem;
-  color: #ffe9c0; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  color: var(--plaque-ink); text-shadow: var(--plaque-name-shadow);
   max-width: 140px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.opponent .opp-name .crown { color: var(--gold); }
+.opponent .opp-name .crown { color: #e8b64c; }
 .opponent .opp-status { font-size: 0.72rem; color: var(--ink-dim); min-height: 1em; }
-.opponent .opp-status.ok { color: var(--gold-bright); }
+.opponent .opp-status.ok { color: var(--accent-bright); }
 .opponent .opp-status.bad { color: var(--danger); }
 .opp-backs { display: flex; align-items: flex-start; height: 78px; padding-top: 6px; position: relative; }
 
-/* The decorative card back — used for every face-down card in the game. */
+/* The decorative card back — used for every face-down card in the game.
+   Fixed values: card backs are identical in every theme. */
 .card-back {
   width: 46px; height: 64px; border-radius: 6px;
   background-color: var(--teal-deep);
@@ -268,9 +592,9 @@ input[type="text"]:focus { border-color: var(--gold); }
 .card-back.in-hand:first-child { margin-left: 0; }
 .opp-backs .back-count {
   position: absolute; top: -8px; right: -16px;
-  background: rgba(12, 6, 2, 0.85); border: 1px solid var(--panel-edge);
+  background: rgba(12, 6, 2, 0.85); border: 1px solid var(--chip-edge);
   border-radius: 999px; padding: 1px 8px;
-  font-size: 0.74rem; color: var(--gold-bright); font-weight: 700;
+  font-size: 0.74rem; color: #ffd98a; font-weight: 700;
 }
 .opp-backs .no-cards { font-size: 0.75rem; color: var(--ink-dim); font-style: italic; align-self: center; }
 .opponent .avatar { margin-right: 3px; }
@@ -289,7 +613,7 @@ input[type="text"]:focus { border-color: var(--gold); }
 }
 @keyframes chip-in { from { transform: scale(1.6) rotate(6deg); opacity: 0; } }
 
-/* ---------- pile: a parchment-and-leather inset in the table center ---------- */
+/* ---------- pile: an inset mat in the table center (towel on the beach) ---------- */
 #pile-area {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   min-height: 0; padding: 6px 0;
@@ -298,23 +622,24 @@ input[type="text"]:focus { border-color: var(--gold); }
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding: 22px 34px 14px;
   border-radius: 24px;
-  background:
-    radial-gradient(ellipse at 50% 8%, rgba(255, 190, 90, 0.09), rgba(255, 190, 90, 0) 65%),
-    linear-gradient(180deg, #221105 0%, #180b03 100%);
-  box-shadow:
-    inset 0 6px 22px rgba(0, 0, 0, 0.85),
-    inset 0 -1px 0 rgba(255, 210, 140, 0.14),
-    inset 0 0 0 2px rgba(226, 178, 88, 0.16),
-    0 1px 0 rgba(255, 210, 140, 0.12);
+  background: var(--mat-bg);
+  box-shadow: var(--mat-shadow);
+}
+.pile-mat .muted-text { color: var(--mat-ink); }
+body[data-theme="beach"] .pile-mat .muted-text {
+  background: rgba(253, 246, 232, 0.85);
+  border-radius: 999px; padding: 2px 12px;
 }
 #pile { position: relative; width: 136px; height: 190px; }
 .pile-slot {
   position: absolute; inset: 0;
-  border: 2px dashed rgba(255, 218, 150, 0.22); border-radius: 14px;
+  border: 2px dashed var(--slot-edge); border-radius: 14px;
+  background: var(--slot-bg, transparent);
   display: flex; align-items: center; justify-content: center;
-  color: rgba(255, 218, 150, 0.3); font-family: var(--serif);
+  color: var(--slot-ink); font-family: var(--serif);
   font-weight: 700; letter-spacing: 0.1em; font-size: 0.95rem;
 }
+/* Cards on the pile: fixed parchment faces, identical in every theme. */
 .pile-card {
   position: absolute; inset: 0;
   background:
@@ -365,7 +690,7 @@ input[type="text"]:focus { border-color: var(--gold); }
 /* Highlighted drop zone while a card is being dragged over the pile. */
 #pile.drop-target::before {
   content: ""; position: absolute; inset: -16px;
-  border: 3px dashed var(--gold-bright); border-radius: 22px;
+  border: 3px dashed #ffd98a; border-radius: 22px;
   box-shadow: 0 0 38px rgba(255, 200, 100, 0.55), inset 0 0 24px rgba(255, 200, 100, 0.2);
   pointer-events: none; z-index: 5;
   animation: drop-breathe 0.9s ease-in-out infinite;
@@ -406,6 +731,7 @@ input[type="text"]:focus { border-color: var(--gold); }
   transform-origin: 50% 140%;
 }
 .card-slot:hover { z-index: 60 !important; }
+/* Hand cards: fixed parchment faces + gold play-glow, identical in every theme. */
 .hand-card {
   width: var(--card-w); height: calc(var(--card-w) * 1.42);
   display: flex; align-items: center; justify-content: center;
@@ -436,7 +762,7 @@ input[type="text"]:focus { border-color: var(--gold); }
     inset 0 0 0 4px #f8efd8,
     inset 0 0 0 5px rgba(150, 112, 60, 0.8),
     inset 0 0 30px rgba(255, 190, 90, 0.35),
-    0 0 0 2.5px var(--gold),
+    0 0 0 2.5px #e8b64c,
     0 0 26px rgba(255, 190, 80, 0.5),
     0 12px 30px rgba(5, 2, 1, 0.6);
   animation: idle-bob 3s ease-in-out infinite;
@@ -463,11 +789,11 @@ input[type="text"]:focus { border-color: var(--gold); }
     inset 0 0 0 4px #f8efd8,
     inset 0 0 0 5px rgba(150, 112, 60, 0.8),
     inset 0 0 30px rgba(255, 190, 90, 0.4),
-    0 0 0 3px var(--gold-bright),
+    0 0 0 3px #ffd98a,
     0 0 38px rgba(255, 200, 90, 0.65),
     0 26px 50px rgba(5, 2, 1, 0.65);
 }
-.hand-empty-note { color: var(--ink-dim); font-size: 0.9rem; align-self: center; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+.hand-empty-note { color: var(--ink-dim); font-size: 0.9rem; align-self: center; text-shadow: var(--ink-shadow); }
 
 /* Flip reveal when the ready check ends and your cards turn face-up. */
 .hand-card.flip-in { animation: flip-in 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.1) both; }
@@ -483,7 +809,7 @@ input[type="text"]:focus { border-color: var(--gold); }
   box-shadow:
     inset 0 0 0 4px #f8efd8,
     inset 0 0 0 5px rgba(150, 112, 60, 0.8),
-    0 0 0 3px var(--gold-bright),
+    0 0 0 3px #ffd98a,
     0 0 42px rgba(255, 200, 90, 0.6),
     0 34px 70px rgba(0, 0, 0, 0.7);
 }
@@ -500,8 +826,8 @@ input[type="text"]:focus { border-color: var(--gold); }
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
   padding: 0 14px; max-width: 100vw;
 }
-.honor-note { font-size: 0.78rem; color: var(--ink-dim); text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
-.honor-note b { color: var(--gold); }
+.honor-note { font-size: 0.78rem; color: var(--ink-dim); text-shadow: var(--ink-shadow); }
+.honor-note b { color: var(--accent); }
 
 /* ---------- concentrate: glowing hands resting on the table ---------- */
 #concentrate-layer { position: fixed; inset: 0; pointer-events: none; z-index: 16; }
@@ -534,6 +860,7 @@ input[type="text"]:focus { border-color: var(--gold); }
    A fixed, pointer-events:none overlay — never in the layout flow, so holding
    or releasing Concentrate can never move the table. Layers hold constant
    inset box-shadows; only their OPACITY is animated (cheap, compositable).
+   Colors come from theme variables so the glow reads on light backgrounds too.
    Blue deepens with the fraction of players holding; green = everyone. */
 #focus-glow { position: fixed; inset: 0; pointer-events: none; z-index: 12; }
 #focus-glow .glow {
@@ -542,15 +869,15 @@ input[type="text"]:focus { border-color: var(--gold); }
   will-change: opacity;
 }
 /* Tight edge ring: the first hint that someone is focusing. */
-#focus-glow .glow-blue-1 { box-shadow: inset 0 0 clamp(34px, 5.5vw, 64px) 10px rgba(104, 172, 255, 0.7); }
+#focus-glow .glow-blue-1 { box-shadow: inset 0 0 clamp(34px, 5.5vw, 64px) 10px var(--focus-ring-1); }
 /* Wider wash that fades in as more of the table joins — the glow "grows". */
-#focus-glow .glow-blue-2 { box-shadow: inset 0 0 clamp(72px, 12vw, 150px) 24px rgba(88, 152, 255, 0.45); }
+#focus-glow .glow-blue-2 { box-shadow: inset 0 0 clamp(72px, 12vw, 150px) 24px var(--focus-ring-2); }
 /* Everyone holding: the ring turns a calm green with a slow, gentle breath. */
 #focus-glow .glow-green-inner {
   position: absolute; inset: 0;
   box-shadow:
-    inset 0 0 clamp(34px, 5.5vw, 64px) 10px rgba(115, 240, 175, 0.7),
-    inset 0 0 clamp(72px, 12vw, 150px) 24px rgba(95, 225, 160, 0.38);
+    inset 0 0 clamp(34px, 5.5vw, 64px) 10px var(--focus-green-1),
+    inset 0 0 clamp(72px, 12vw, 150px) 24px var(--focus-green-2);
   animation: glow-breathe 3.2s ease-in-out infinite;
 }
 @keyframes glow-breathe { 50% { opacity: 0.7; } }
@@ -582,21 +909,46 @@ input[type="text"]:focus { border-color: var(--gold); }
 .avatar-picker { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .avatar-option {
   font: inherit; font-size: 1.5rem; line-height: 1; padding: 8px 0;
-  background: rgba(0, 0, 0, 0.32); border: 2px solid rgba(226, 178, 88, 0.15);
+  background: var(--well-bg); border: 2px solid var(--well-edge);
   border-radius: 10px; cursor: pointer;
   transition: transform 0.1s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .avatar-option:hover { transform: scale(1.08); }
 .avatar-option.selected {
-  border-color: var(--gold); background: rgba(232, 182, 76, 0.14);
+  border-color: var(--accent); background: rgba(232, 182, 76, 0.14);
   box-shadow: 0 0 14px rgba(255, 200, 100, 0.4);
 }
+
+/* ---------- theme picker ---------- */
+.theme-options { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.theme-option {
+  display: flex; align-items: center; gap: 14px;
+  font: inherit; font-weight: 600; color: var(--ink); text-align: left;
+  background: var(--well-bg); border: 2px solid var(--well-edge);
+  border-radius: 12px; padding: 10px 14px; cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.theme-option:hover { transform: scale(1.02); }
+.theme-option.selected { border-color: var(--accent); box-shadow: 0 0 14px rgba(120, 160, 160, 0.35); }
+.theme-option .theme-swatch {
+  flex-shrink: 0; width: 56px; height: 40px; border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.theme-swatch[data-t="tavern"] { background: radial-gradient(ellipse at 50% 20%, rgba(255, 176, 76, 0.4), rgba(0, 0, 0, 0) 70%), linear-gradient(180deg, #4b2d16, #221207); }
+.theme-swatch[data-t="beach"] { background: linear-gradient(180deg, #9cd8f2 0 34%, #2ea6cb 34% 55%, #8fdcd9 55% 60%, #ecd6a4 60%); }
+.theme-swatch[data-t="night"] { background: radial-gradient(circle 8px at 74% 22%, #e8f0ff 40%, rgba(232, 240, 255, 0) 60%), linear-gradient(180deg, #1a2545, #070b1a); }
+.theme-option .theme-name { display: block; }
+.theme-option .theme-desc { display: block; font-size: 0.76rem; font-weight: 500; color: var(--ink-dim); }
+.theme-option .theme-check { margin-left: auto; color: var(--accent); font-weight: 800; visibility: hidden; }
+.theme-option.selected .theme-check { visibility: visible; }
+#btn-theme-close { display: block; margin: 16px auto 0; }
 
 /* ---------- pause banner ---------- */
 .pause-banner {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   z-index: 6;
-  background: rgba(24, 12, 4, 0.94); border: 1px solid var(--danger);
+  background: var(--toast-bg); border: 1px solid var(--danger);
   color: var(--ink); border-radius: 14px; padding: 18px 26px;
   font-weight: 600; text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
@@ -607,7 +959,7 @@ input[type="text"]:focus { border-color: var(--gold); }
 /* ---------- overlays ---------- */
 .overlay {
   position: fixed; inset: 0; z-index: 20;
-  background: rgba(14, 7, 2, 0.8);
+  background: var(--overlay-scrim);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
@@ -616,18 +968,16 @@ input[type="text"]:focus { border-color: var(--gold); }
 @keyframes fade-in { from { opacity: 0; } }
 .overlay-panel {
   width: min(450px, 100%);
-  background:
-    var(--wood-noise),
-    linear-gradient(180deg, #3a2310, #281608);
-  border: 1px solid rgba(0, 0, 0, 0.7);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   outline: 1px solid var(--panel-edge); outline-offset: -5px;
   border-radius: 18px; padding: 30px 26px;
   text-align: center;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 210, 140, 0.22);
+  box-shadow: var(--panel-shadow);
   animation: panel-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.15);
 }
 @keyframes panel-in { from { transform: translateY(24px) scale(0.96); opacity: 0; } }
-.overlay-panel h2 { font-family: var(--serif); font-size: 1.7rem; margin-bottom: 8px; color: #ffe9c0; }
+.overlay-panel h2 { font-family: var(--serif); font-size: 1.7rem; margin-bottom: 8px; color: var(--panel-heading); }
 .overlay-panel .btn-big { margin-top: 18px; }
 .overlay-panel .btn-row { margin-top: 18px; }
 #ready-waiting, #vote-waiting, #level-waiting, #end-waiting { margin-top: 16px; }
@@ -636,26 +986,28 @@ input[type="text"]:focus { border-color: var(--gold); }
 .ready-list li {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 14px; margin-bottom: 6px;
-  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(226, 178, 88, 0.1);
+  background: var(--well-bg); border: 1px solid var(--well-edge);
   border-radius: 10px;
   font-weight: 600; font-size: 0.95rem;
 }
 .ready-list .state { font-size: 0.8rem; color: var(--ink-dim); }
-.ready-list .state.ok { color: var(--gold-bright); }
+.ready-list .state.ok { color: var(--accent-bright); }
 .ready-list .state.bad { color: var(--danger); }
 
-.reward-text { font-size: 1.15rem; margin-top: 6px; color: var(--gold); font-weight: 700; min-height: 1.4em; }
+.reward-text { font-size: 1.15rem; margin-top: 6px; color: var(--accent); font-weight: 700; min-height: 1.4em; }
 
 #overlay-end .overlay-panel h2 { font-size: 2rem; }
-#overlay-end.won .overlay-panel { outline-color: rgba(255, 210, 110, 0.6); box-shadow: 0 0 90px rgba(255, 190, 80, 0.3), 0 30px 90px rgba(0, 0, 0, 0.7); }
+#overlay-end.won .overlay-panel { outline-color: rgba(255, 210, 110, 0.6); box-shadow: 0 0 90px rgba(255, 190, 80, 0.3), var(--panel-shadow); }
 #overlay-end.lost .overlay-panel { outline-color: rgba(255, 120, 105, 0.45); }
 #btn-end-leave { margin-top: 14px; }
 
-/* ---------- stats panel: the tavern ledger ---------- */
+/* ---------- stats panel: the tavern ledger (postcard on the beach) ---------- */
 #overlay-stats { z-index: 24; }
+#overlay-theme { z-index: 24; }
 .hud-btn { cursor: pointer; font: inherit; color: var(--ink); }
-.hud-btn:hover { border-color: var(--gold); }
+.hud-btn:hover { border-color: var(--accent); }
 #btn-stats-lobby { margin-bottom: 4px; }
+#btn-theme-lobby { margin-bottom: 4px; }
 #btn-stats-level, #btn-stats-end { margin-top: 12px; }
 .stats-panel {
   width: min(560px, 100%);
@@ -664,22 +1016,22 @@ input[type="text"]:focus { border-color: var(--gold); }
 }
 .stats-panel h2 { text-align: center; }
 .stats-section h3 {
-  font-family: var(--serif); color: var(--gold-bright); font-size: 1.02rem;
+  font-family: var(--serif); color: var(--accent-bright); font-size: 1.02rem;
   margin: 16px 0 8px; padding-bottom: 4px;
-  border-bottom: 1px solid rgba(226, 178, 88, 0.22);
+  border-bottom: 1px solid var(--panel-edge);
 }
 .stat-chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .stat-chip {
-  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(226, 178, 88, 0.15);
+  background: var(--well-bg); border: 1px solid var(--well-edge);
   border-radius: 10px; padding: 6px 11px; font-size: 0.8rem; color: var(--ink-dim);
 }
-.stat-chip b { color: var(--gold-bright); }
+.stat-chip b { color: var(--accent-bright); }
 .stats-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 .stats-table th {
   color: var(--ink-dim); font-weight: 600; text-align: right; padding: 3px 6px;
   font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;
 }
-.stats-table td { padding: 5px 6px; text-align: right; border-top: 1px solid rgba(226, 178, 88, 0.09); }
+.stats-table td { padding: 5px 6px; text-align: right; border-top: 1px solid var(--well-edge); }
 .stats-table th:first-child, .stats-table td:first-child { text-align: left; }
 .stats-table td.pname {
   font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 128px;
@@ -688,17 +1040,17 @@ input[type="text"]:focus { border-color: var(--gold); }
 .recent-games { display: flex; gap: 6px; flex-wrap: wrap; }
 .game-chip {
   font-size: 0.78rem; font-weight: 700; padding: 3px 9px; border-radius: 8px;
-  background: rgba(0, 0, 0, 0.28); border: 1px solid;
+  background: var(--well-bg); border: 1px solid;
 }
-.game-chip.won { border-color: rgba(255, 210, 110, 0.5); color: var(--gold-bright); }
-.game-chip.lost { border-color: rgba(255, 130, 115, 0.4); color: #ffb9af; }
+.game-chip.won { border-color: rgba(255, 210, 110, 0.5); color: var(--accent-bright); }
+.game-chip.lost { border-color: rgba(255, 130, 115, 0.4); color: var(--danger); }
 .superlatives { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .superlative {
   display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(226, 178, 88, 0.12);
+  background: var(--well-bg); border: 1px solid var(--well-edge);
   border-radius: 10px; padding: 7px 11px; font-size: 0.85rem;
 }
-.superlative .sup-title { color: var(--gold); font-weight: 700; }
+.superlative .sup-title { color: var(--accent); font-weight: 700; }
 .superlative .sup-detail { color: var(--ink-dim); font-size: 0.78rem; }
 .stats-empty { color: var(--ink-dim); font-size: 0.85rem; font-style: italic; }
 #btn-stats-close { display: block; margin: 16px auto 0; }
@@ -730,8 +1082,9 @@ input[type="text"]:focus { border-color: var(--gold); }
   z-index: 40; pointer-events: none; width: min(94vw, 480px);
 }
 .toast {
-  background: rgba(26, 14, 5, 0.96); border: 1px solid var(--panel-edge);
+  background: var(--toast-bg); border: 1px solid var(--chip-edge);
   border-radius: 12px; padding: 10px 18px;
+  color: var(--ink);
   font-size: 0.9rem; font-weight: 600; text-align: center;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
   animation: toast-in 0.25s ease;
@@ -776,6 +1129,9 @@ input[type="text"]:focus { border-color: var(--gold); }
   .stats-table { font-size: 0.76rem; }
   .stats-table td { padding: 4px 3px; }
   .stats-table td.pname { max-width: 88px; }
+  #croatia-flag { right: 8px; }
+  #croatia-flag svg { width: 24px; height: 35px; }
+  .night-moon { width: 54px; height: 54px; }
 }
 
 @media (max-height: 620px) {

@@ -8,10 +8,18 @@
 
   const SESSION_KEY = 'themind_session';
   const AVATAR_KEY = 'themind_avatar';
+  const THEME_KEY = 'themind_theme';
 
   // Keep in sync with the server's allowed sets (server validates anyway).
   const AVATARS = ['🦊', '🐼', '🐸', '🦉', '🐙', '🦄', '🐯', '🐨', '🐺', '🦁', '🐵', '🐹'];
   const EMOTES = ['🙌', '👏', '🔥', '😱', '😅', '❤️', '🤯', '🎉', '🍑', '🍆', '💦'];
+
+  // Table themes: swap the world, never the cards. Room-level and server-synced.
+  const THEMES = {
+    tavern: { label: 'Tavern', emoji: '🕯️', desc: 'Candlelight on old wood', color: '#1c1008', stats: '📊 Tavern ledger' },
+    beach: { label: 'Beach', emoji: '🏖️', desc: 'Holiday afternoon by the sea', color: '#8fd3f0', stats: '📮 Beach postcard' },
+    night: { label: 'Starry Night', emoji: '🌌', desc: 'Moonlight and quiet stars', color: '#0d1428', stats: '🌌 Star chart' },
+  };
 
   let ws = null;
   let state = null;          // last server state
@@ -100,6 +108,7 @@
     if (msg.type === 'state') {
       const prev = state;
       state = msg;
+      applyTheme(msg.theme); // room-level theme, synced for everyone
       processEvents(prev, msg);
       // Purely cosmetic change (someone pressed/released Concentrate)?
       // Update only the fixed overlay visuals: a full re-render would rebuild
@@ -197,6 +206,14 @@
       case 'emote':
         floatEmote(ev.playerId, ev.emote, s);
         break;
+      case 'themeChanged': {
+        const t = THEMES[ev.theme];
+        if (ev.playerId !== me && t) {
+          toast(`🎨 ${ev.name} changed the theme to ${t.label} ${t.emoji}`);
+        }
+        renderThemePicker(); // keep the picker's checkmark honest if it's open
+        break;
+      }
       case 'levelComplete':
         if (ev.reward === 'life') bump('#hud-lives');
         if (ev.reward === 'star') bump('#hud-stars');
@@ -1023,6 +1040,71 @@
     $('#overlay-stats').classList.remove('hidden');
   }
 
+  // ---------- themes ----------
+  // The theme is a ROOM setting: anyone can change it and the server syncs it
+  // to every player. The last theme you picked is also remembered locally and
+  // used as the default when you create a new room.
+  let localTheme = localStorage.getItem(THEME_KEY);
+  if (!THEMES[localTheme]) localTheme = 'tavern';
+
+  /** Purely cosmetic: swaps the world via body[data-theme]; cards never change. */
+  function applyTheme(theme) {
+    if (!THEMES[theme]) theme = 'tavern';
+    if (document.body.dataset.theme === theme) return;
+    document.body.dataset.theme = theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEMES[theme].color);
+    $('#stats-title').textContent = THEMES[theme].stats; // the ledger travels too
+  }
+
+  const activeTheme = () => (state && THEMES[state.theme] ? state.theme : localTheme);
+
+  function renderThemePicker() {
+    const wrap = $('#theme-options');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    const current = activeTheme();
+    for (const [key, t] of Object.entries(THEMES)) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'theme-option' + (key === current ? ' selected' : '');
+      btn.setAttribute('role', 'radio');
+      btn.setAttribute('aria-checked', key === current ? 'true' : 'false');
+      const swatch = document.createElement('span');
+      swatch.className = 'theme-swatch';
+      swatch.dataset.t = key;
+      const text = document.createElement('span');
+      const name = document.createElement('span');
+      name.className = 'theme-name';
+      name.textContent = `${t.emoji} ${t.label}`;
+      const desc = document.createElement('span');
+      desc.className = 'theme-desc';
+      desc.textContent = t.desc;
+      text.append(name, desc);
+      const check = document.createElement('span');
+      check.className = 'theme-check';
+      check.textContent = '✓';
+      btn.append(swatch, text, check);
+      btn.addEventListener('click', () => {
+        localTheme = key;
+        localStorage.setItem(THEME_KEY, key);
+        applyTheme(key); // instant feedback; the server echo confirms it
+        if (state) sendMsg({ type: 'setTheme', theme: key });
+        renderThemePicker();
+      });
+      wrap.appendChild(btn);
+    }
+  }
+
+  const openThemePicker = () => {
+    renderThemePicker();
+    $('#overlay-theme').classList.remove('hidden');
+  };
+  const closeThemePicker = () => $('#overlay-theme').classList.add('hidden');
+
+  // The little flag planted in the beach sand — a souvenir of certain holidays.
+  $('#croatia-flag').addEventListener('click', () => toast('Pozdrav iz Hrvatske! 🇭🇷', 'good'));
+
   // ---------- avatar picker ----------
   let myAvatar = localStorage.getItem(AVATAR_KEY);
   if (!AVATARS.includes(myAvatar)) {
@@ -1073,7 +1155,7 @@
     if (!name) return setHomeError('Enter your name first');
     setHomeError('');
     setHomeStatus('Creating room…');
-    connect({ type: 'create', name, avatar: myAvatar });
+    connect({ type: 'create', name, avatar: myAvatar, theme: localTheme });
   });
 
   $('#btn-join').addEventListener('click', joinRoom);
@@ -1140,6 +1222,13 @@
   $('#overlay-stats').addEventListener('click', (e) => {
     if (e.target === $('#overlay-stats')) closeStats(); // tap outside to dismiss
   });
+  for (const id of ['#btn-theme', '#btn-theme-lobby']) {
+    $(id).addEventListener('click', openThemePicker);
+  }
+  $('#btn-theme-close').addEventListener('click', closeThemePicker);
+  $('#overlay-theme').addEventListener('click', (e) => {
+    if (e.target === $('#overlay-theme')) closeThemePicker(); // tap outside to dismiss
+  });
 
   $('#btn-vote-yes').addEventListener('click', () => sendMsg({ type: 'voteStar', agree: true }));
   $('#btn-vote-no').addEventListener('click', () => sendMsg({ type: 'voteStar', agree: false }));
@@ -1149,6 +1238,8 @@
   function leaveRoom() {
     intentionalClose = true;
     closeStats();
+    closeThemePicker();
+    applyTheme(localTheme); // back to your own preferred vibe
     clearSession();
     if (ws) ws.close();
     ws = null;
@@ -1161,6 +1252,7 @@
   $('#btn-end-leave').addEventListener('click', leaveRoom);
 
   // ---------- boot ----------
+  applyTheme(localTheme); // your last-used theme until a room says otherwise
   const params = new URLSearchParams(location.search);
   if (params.get('room')) $('#code-input').value = params.get('room').toUpperCase();
 

@@ -34,6 +34,15 @@ in a browser, joins the same room code, and plays together while talking on the 
   without interrupting play
 - A warm **tavern table** look: wood-grain table, parchment cards with ornate
   borders, a decorative filigree card back — all CSS/inline SVG, no image assets
+- **🎨 Table themes**: pick the scene via the 🎨 button in the lobby or the
+  mid-game HUD — **Tavern 🕯️** (the classic), **Beach 🏖️** (a sunny holiday
+  afternoon: sea, sand, drifting clouds, a striped-towel pile mat and driftwood
+  seat plaques) or **Starry Night 🌌** (moonlight and quiet stars). The theme is
+  a room-level setting: anyone can change it and everyone on the call sees the
+  same scene instantly. It only reskins the world — the cards, and the game,
+  never change. Your last pick is remembered as the default for rooms you
+  create. And if you look closely around the beach, a little souvenir from a
+  certain seaside holiday is planted in the sand… try clicking it 🫡
 
 ## Run it locally
 
@@ -125,5 +134,6 @@ client and never pauses play), emotes (broadcast, per-player rate limit, allowed
 validation), disconnect → pause → token reconnect, room statistics (mistakes
 attributed to the player who played the too-high card, plausible reaction times,
 `getStats` replies, play-again resetting this-game while keeping room all-time),
-and verifies that no client ever receives another player's card values — including
-via the stats.
+table themes (tavern default, any player may change it, broadcast to everyone,
+invalid themes rejected, persistence across levels and play-again), and verifies
+that no client ever receives another player's card values — including via the stats.

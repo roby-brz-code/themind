@@ -38,6 +38,11 @@ const AVATARS = ['🦊', '🐼', '🐸', '🦉', '🐙', '🦄', '🐯', '🐨',
 const EMOTES = ['🙌', '👏', '🔥', '😱', '😅', '❤️', '🤯', '🎉', '🍑', '🍆', '💦'];
 const EMOTE_COOLDOWN_MS = 1000;
 
+// Table themes. A room-level, purely cosmetic setting: any player may change it
+// and every client re-skins the world (never the cards, never game state).
+const THEMES = ['tavern', 'beach', 'night'];
+const DEFAULT_THEME = 'tavern';
+
 // A concentrate "hand on the table" hold auto-clears after this long as a safety
 // net (e.g. the releasing message got lost, or the tab was backgrounded).
 const CONCENTRATE_TTL_MS = 30 * 1000;
@@ -121,6 +126,7 @@ function createRoom() {
   const room = {
     code: makeCode(),
     players: [],
+    theme: DEFAULT_THEME, // room-wide table skin; cosmetic only
     phase: 'lobby', // lobby | readyCheck | playing | levelComplete | gameOver | won
     readyReason: null, // levelStart | lifeLost
     level: 0,
@@ -355,6 +361,7 @@ function stateFor(room, viewer) {
     type: 'state',
     code: room.code,
     you: viewer.id,
+    theme: room.theme,
     phase: room.phase,
     readyReason: room.readyReason,
     level: room.level,
@@ -428,6 +435,8 @@ function doCreate(ws, msg) {
   if (ws._room) fail('Already in a room');
   const name = cleanName(msg.name);
   const room = createRoom();
+  // The creator's preferred table theme (client remembers the last one used).
+  if (THEMES.includes(msg.theme)) room.theme = msg.theme;
   const player = createPlayer(name, true, cleanAvatar(msg.avatar));
   room.players.push(player);
   attach(ws, room, player);
@@ -619,6 +628,18 @@ function doConcentrate(room, player, on) {
   }
 }
 
+/**
+ * Change the room's table theme. Cosmetic only — any player may do it, in any
+ * phase, and it never touches cards, lives, or the pile. Broadcast in state so
+ * everyone on the call shares the same vibe.
+ */
+function doSetTheme(room, player, theme) {
+  if (!THEMES.includes(theme)) fail('That theme is not available');
+  if (room.theme === theme) return; // no-op: no event spam
+  room.theme = theme;
+  emit(room, { kind: 'themeChanged', playerId: player.id, name: player.name, theme });
+}
+
 function doEmote(room, player, emote) {
   if (!EMOTES.includes(emote)) fail('That emote is not allowed');
   if (room.phase === 'lobby') fail('Emotes are for the game table');
@@ -727,6 +748,7 @@ function handleMessage(ws, msg) {
     case 'concentrateStart': doConcentrate(room, player, true); break;
     case 'concentrateStop': doConcentrate(room, player, false); break;
     case 'emote': doEmote(room, player, msg.emote); break;
+    case 'setTheme': doSetTheme(room, player, msg.theme); break;
     case 'nextLevel': doNextLevel(room, player); break;
     case 'playAgain': doPlayAgain(room, player); break;
     default: fail('Unknown action');
