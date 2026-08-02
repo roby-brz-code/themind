@@ -13,11 +13,16 @@ in a browser, joins the same room code, and plays together while talking on the 
   you see how many they hold, never what
 - A **play history** under the pile shows everything played this level, in order,
   with face-up discards visually distinct
-- **Drag** your lowest card onto the pile to play it (mouse or touch), or just click
-- **🧘 Concentrate**: anyone can pause the game for a "hands on the table" regroup —
-  play resumes when everyone is ready again
-- **Emotes**: high-five 🙌, 👏, 🔥, 😱 … float up from a player's seat without
-  interrupting play
+- **Drag** your lowest card onto the pile to play it (mouse or touch), or just click —
+  the card lifts, sways with your movement, and arcs into the pile with a satisfying
+  thump (plus a haptic buzz on phones)
+- **🖐️ Concentrate (hold)**: press and HOLD the button to rest your hand on the
+  table — everyone sees a glowing hand at your seat until you let go. Purely a
+  signal: it never pauses the game or blocks plays
+- **Emotes**: high-five 🙌, 👏, 🔥, 😱, 🍑, 🍆, 💦 … float up from a player's seat
+  without interrupting play
+- A warm **tavern table** look: wood-grain table, parchment cards with ornate
+  borders, a decorative filigree card back — all CSS/inline SVG, no image assets
 
 ## Run it locally
 
@@ -104,7 +109,7 @@ npm test             # terminal 2 (URL=ws://host:port to point elsewhere)
 The simulation covers room create/join (avatar pick, validation, and random default),
 ready checks, in-order play, the play history (plays vs face-up discards), a forced
 mistake (life loss + face-up auto-discard + re-ready pause), declined and unanimous
-star votes, level rewards, concentrate pauses (blocked plays + spam protection),
-emotes (broadcast, per-player rate limit, allowed-set validation), disconnect →
-pause → token reconnect, and verifies that no client ever receives another player's
-card values.
+star votes, level rewards, concentrate hold/release (the flag is broadcast to every
+client and never pauses play), emotes (broadcast, per-player rate limit, allowed-set
+validation), disconnect → pause → token reconnect, and verifies that no client ever
+receives another player's card values.

@@ -11,7 +11,7 @@
 
   // Keep in sync with the server's allowed sets (server validates anyway).
   const AVATARS = ['🦊', '🐼', '🐸', '🦉', '🐙', '🦄', '🐯', '🐨', '🐺', '🦁', '🐵', '🐹'];
-  const EMOTES = ['🙌', '👏', '🔥', '😱', '😅', '❤️', '🤯', '🎉'];
+  const EMOTES = ['🙌', '👏', '🔥', '😱', '😅', '❤️', '🤯', '🎉', '🍑', '🍆', '💦'];
 
   let ws = null;
   let state = null;          // last server state
@@ -148,9 +148,13 @@
           flyCardToPile(ev.playerId);
           toast(`${avatarOf(s, ev.playerId)} ${ev.name} played ${ev.card}`, 'good');
         }
+        pileThump(false);
+        vibrate(30);
         break;
       case 'mistake': {
         if (ev.playerId !== me) flyCardToPile(ev.playerId);
+        pileThump(true);
+        vibrate([60, 60, 90]); // stronger double-pulse: a life was lost
         flash('life-lost');
         shake();
         bump('#hud-lives');
@@ -173,9 +177,6 @@
         toast(`★ Star! Lowest cards thrown: ${cards}`, 'gold', 5000);
         break;
       }
-      case 'concentrate':
-        if (ev.playerId !== me) toast(`🧘 ${ev.name} asks everyone to concentrate`, 'gold');
-        break;
       case 'emote':
         floatEmote(ev.playerId, ev.emote, s);
         break;
@@ -192,6 +193,22 @@
   }
 
   // ---------- tiny effect helpers ----------
+  /** Haptic pulse where supported (mobile); a no-op on desktop. */
+  function vibrate(pattern) {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try { navigator.vibrate(pattern); } catch { /* ignore */ }
+    }
+  }
+
+  /** Satisfying visual thump on the pile whenever a card lands. */
+  function pileThump(bad) {
+    const pile = $('#pile');
+    if (!pile) return;
+    pile.classList.remove('thump', 'thump-bad');
+    void pile.offsetWidth; // restart animation
+    pile.classList.add(bad ? 'thump-bad' : 'thump');
+  }
+
   function toast(text, cls = '', ms = 3200) {
     const el = document.createElement('div');
     el.className = `toast ${cls}`;
@@ -276,6 +293,67 @@
     setTimeout(() => ghost.remove(), 600);
   }
 
+  /** My own card arcs from wherever it is (fan slot or drag position) into the pile. */
+  function flyMyCard(btn) {
+    const pile = $('#pile');
+    if (!pile) return;
+    const from = btn.getBoundingClientRect();
+    const to = pile.getBoundingClientRect();
+    const ghost = btn.cloneNode(true);
+    ghost.className = 'hand-card fly-mine';
+    ghost.removeAttribute('disabled');
+    ghost.style.cssText =
+      `position:fixed;left:${from.left}px;top:${from.top}px;` +
+      `width:${from.width}px;height:${from.height}px;margin:0;transform:none;`;
+    document.body.appendChild(ghost);
+    btn.style.visibility = 'hidden';
+    const dx = to.left + to.width / 2 - (from.left + from.width / 2);
+    const dy = to.top + to.height / 2 - (from.top + from.height / 2);
+    const sc = Math.min(1, to.width / from.width);
+    requestAnimationFrame(() => {
+      ghost.style.transform = `translate(${dx}px, ${dy}px) scale(${sc}) rotate(${Math.random() * 10 - 5}deg)`;
+    });
+    setTimeout(() => ghost.remove(), 480);
+  }
+
+  /**
+   * Glowing "hand resting on the table" for every player currently holding the
+   * Concentrate button. Positioned over each player's seat; fades on release.
+   */
+  function updateConcentrateHands(s) {
+    const layer = $('#concentrate-layer');
+    if (!layer) return;
+    const active = new Map();
+    for (const p of s.players) if (p.concentrating) active.set(p.id, p);
+    for (const el of [...layer.children]) {
+      if (!active.has(el.dataset.playerId) && !el.classList.contains('fading')) {
+        el.classList.add('fading');
+        setTimeout(() => el.remove(), 450);
+      }
+    }
+    for (const [id, p] of active) {
+      let el = [...layer.children].find((n) => n.dataset.playerId === id && !n.classList.contains('fading'));
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'concentrate-hand';
+        el.dataset.playerId = id;
+        const glyph = document.createElement('span');
+        glyph.className = 'glyph';
+        glyph.textContent = '🖐️';
+        const av = document.createElement('span');
+        av.className = 'c-avatar';
+        av.textContent = p.avatar || '';
+        el.append(glyph, av);
+        layer.appendChild(el);
+      }
+      const seat = seatEl(id);
+      if (!seat) continue;
+      const r = seat.getBoundingClientRect();
+      el.style.left = `${r.left + r.width / 2}px`;
+      el.style.top = id === s.you ? `${r.top + 14}px` : `${r.top + r.height * 0.45}px`;
+    }
+  }
+
   const setHomeError = (t) => { $('#home-error').textContent = t || ''; };
   const setHomeStatus = (t) => { $('#home-status').textContent = t || ''; };
 
@@ -286,6 +364,10 @@
   }
 
   function render() {
+    if (!state || state.phase === 'lobby') {
+      const layer = $('#concentrate-layer');
+      if (layer) layer.innerHTML = '';
+    }
     if (!state) { showScreen('#screen-home'); return; }
     if (state.phase === 'lobby') {
       renderLobby();
@@ -351,6 +433,7 @@
     renderHand(s, my);
     renderPauseBanner(s);
     renderOverlays(s, my);
+    updateConcentrateHands(s);
   }
 
   function renderOpponents(s) {
@@ -386,12 +469,12 @@
       } else if (p.cardCount > 0) {
         // Hearthstone-style fan: one face-down back per held card, arced.
         const n = Math.min(p.cardCount, 12);
-        const spread = Math.min(9, 60 / n);
+        const spread = Math.min(11, 78 / n);
         for (let i = 0; i < n; i++) {
           const back = document.createElement('div');
           back.className = 'card-back fanned';
           const angle = (i - (n - 1) / 2) * spread;
-          const lift = Math.abs(i - (n - 1) / 2) * (n > 1 ? 2.2 : 0);
+          const lift = Math.abs(i - (n - 1) / 2) * (n > 1 ? 2.6 : 0);
           back.style.transform = `rotate(${angle}deg) translateY(${lift}px)`;
           back.style.zIndex = i + 1;
           backs.appendChild(back);
@@ -444,7 +527,7 @@
         const el = document.createElement('div');
         const depth = cards.length - 1 - i; // 0 = top
         el.className = 'pile-card' + (depth === 0 ? ' top-card' : ` under-${depth}`);
-        el.innerHTML = `<span class="corner">${c}</span>${c}`;
+        el.innerHTML = `<span class="corner tl">${c}</span><span class="num">${c}</span><span class="corner br">${c}</span>`;
         pile.appendChild(el);
       });
     }
@@ -466,20 +549,20 @@
     if (hist.lastChild) hist.scrollLeft = hist.scrollWidth;
   }
 
+  let handWasHidden = true; // to trigger the flip-reveal animation exactly once
+
   function renderHand(s, my) {
     const hand = $('#hand');
     hand.innerHTML = '';
     const canPlay = s.phase === 'playing' && !s.vote && s.players.every((p) => p.connected);
+    const justRevealed = handWasHidden && s.hand !== null && s.hand.length > 0;
+    handWasHidden = s.hand === null;
 
     if (s.hand === null) {
       // Cards dealt but hidden until everyone is ready.
       for (let i = 0; i < s.handCount; i++) {
         const back = document.createElement('div');
-        back.className = 'card-back';
-        back.style.width = '58px';
-        back.style.height = '84px';
-        back.style.marginLeft = i ? '-20px' : '0';
-        back.style.alignSelf = 'center';
+        back.className = 'card-back in-hand';
         hand.appendChild(back);
       }
     } else if (s.hand.length === 0) {
@@ -488,20 +571,37 @@
       note.textContent = ['gameOver', 'won', 'levelComplete'].includes(s.phase) ? '' : 'All your cards are out — cheer the others on! 🎉';
       hand.appendChild(note);
     } else {
+      // Big Hearthstone-style arc: rotated slots hold the cards; overlap is
+      // computed so the whole fan always fits the viewport.
       const n = s.hand.length;
-      const spread = Math.min(5, 36 / n);
+      const spread = Math.min(5.5, 44 / n);
+      const cardW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--card-w')) || 148;
+      const avail = Math.min(window.innerWidth - 28, 920);
+      let overlap = 0;
+      if (n > 1) {
+        overlap = Math.max(cardW * 0.5, (n * cardW - avail) / (n - 1));
+        overlap = Math.min(overlap, cardW * 0.84);
+      }
       s.hand.forEach((c, i) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'hand-card' + (i === 0 && canPlay ? ' playable' : '');
-        btn.disabled = !(i === 0 && canPlay);
-        btn.innerHTML = `<span class="corner">${c}</span>${c}`;
+        const slot = document.createElement('div');
+        slot.className = 'card-slot';
         const angle = (i - (n - 1) / 2) * spread;
         const lift = Math.abs(i - (n - 1) / 2) * (n > 1 ? 6 : 0);
-        btn.style.transform = `rotate(${angle}deg) translateY(${lift}px)`;
-        btn.style.zIndex = i + 1;
-        if (i === 0 && canPlay) makePlayable(btn);
-        hand.appendChild(btn);
+        slot.style.transform = `rotate(${angle}deg) translateY(${lift}px)`;
+        slot.style.zIndex = i + 1;
+        if (i > 0) slot.style.marginLeft = `${-overlap}px`;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'hand-card' + (i === 0 && canPlay ? ' playable' : '') + (justRevealed ? ' flip-in' : '');
+        btn.disabled = !(i === 0 && canPlay);
+        btn.style.setProperty('--unrot', `${-angle}deg`);
+        if (justRevealed) btn.style.animationDelay = `${i * 55}ms`;
+        btn.innerHTML =
+          `<span class="corner tl">${c}</span><span class="num">${c}</span><span class="corner br">${c}</span>`;
+        if (i === 0 && canPlay) makePlayable(btn, angle);
+        slot.appendChild(btn);
+        hand.appendChild(slot);
       });
     }
 
@@ -528,21 +628,39 @@
   function playCardNow(btn) {
     if (cardPlayed) return;
     cardPlayed = true;
-    btn.classList.add('leaving');
+    flyMyCard(btn); // arc flight into the pile (the pile thumps when the event echoes back)
     sendMsg({ type: 'playCard' });
   }
 
   function overPile(x, y) {
     const r = $('#pile').getBoundingClientRect();
-    const pad = 30; // generous drop zone
+    const pad = 40; // generous drop zone
     return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
   }
 
-  /** Click OR pointer-drag the lowest card onto the pile. */
-  function makePlayable(btn) {
+  /**
+   * Click OR pointer-drag the lowest card onto the pile. The drag is physical:
+   * the card lifts, follows the pointer with a springy lag (rAF + easing) and
+   * tilts with its horizontal velocity, Hearthstone-style. `slotAngle` is the
+   * fan rotation of the parent slot, compensated so the card tracks the pointer
+   * in screen space.
+   */
+  function makePlayable(btn, slotAngle) {
     cardPlayed = false;
-    const baseTransform = btn.style.transform;
-    let startX = 0, startY = 0, dragging = false, moved = false;
+    let dragging = false, moved = false, raf = 0;
+    let startX = 0, startY = 0;      // pointer origin
+    let tx = 0, ty = 0;              // where the pointer wants the card
+    let cx = 0, cy = 0, tilt = 0;    // where the card actually is (eased)
+
+    const step = () => {
+      cx += (tx - cx) * 0.3;
+      cy += (ty - cy) * 0.3;
+      const targetTilt = Math.max(-16, Math.min(16, (tx - cx) * 0.35));
+      tilt += (targetTilt - tilt) * 0.25;
+      btn.style.transform =
+        `rotate(${-slotAngle}deg) translate(${cx}px, ${cy}px) rotate(${tilt.toFixed(2)}deg) scale(1.15)`;
+      if (dragging) raf = requestAnimationFrame(step);
+    };
 
     btn.addEventListener('click', () => { if (!moved) playCardNow(btn); });
 
@@ -552,33 +670,41 @@
       moved = false;
       startX = e.clientX;
       startY = e.clientY;
+      tx = ty = cx = cy = tilt = 0;
       btn.setPointerCapture(e.pointerId);
     });
 
     btn.addEventListener('pointermove', (e) => {
       if (!dragging || cardPlayed) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      if (!moved && Math.hypot(dx, dy) < 8) return; // still a tap
-      moved = true;
-      btn.classList.add('dragging');
-      btn.style.transform = `translate(${dx}px, ${dy}px) rotate(0deg) scale(1.06)`;
+      tx = e.clientX - startX;
+      ty = e.clientY - startY;
+      if (!moved && Math.hypot(tx, ty) < 8) return; // still a tap
+      if (!moved) {
+        moved = true;
+        btn.classList.add('dragging');
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(step);
+      }
       $('#pile').classList.toggle('drop-target', overPile(e.clientX, e.clientY));
     });
 
     const finish = (e, cancelled) => {
       if (!dragging) return;
       dragging = false;
+      cancelAnimationFrame(raf);
       $('#pile').classList.remove('drop-target');
       if (!moved) return; // plain tap → the click handler plays it
       if (!cancelled && overPile(e.clientX, e.clientY)) {
-        btn.style.transform = '';
         playCardNow(btn);
       } else {
-        // Snap back into the fan.
+        // Glide back into the fan slot (transition, not a teleport).
+        btn.classList.remove('dragging');
         btn.classList.add('snapping');
-        btn.style.transform = baseTransform;
-        setTimeout(() => btn.classList.remove('dragging', 'snapping'), 220);
+        requestAnimationFrame(() => { btn.style.transform = ''; });
+        setTimeout(() => {
+          btn.classList.remove('snapping');
+          moved = false;
+        }, 300);
       }
     };
     btn.addEventListener('pointerup', (e) => finish(e, false));
@@ -603,16 +729,10 @@
     if (s.phase === 'readyCheck') {
       readyOv.classList.remove('hidden');
       const lifeLost = s.readyReason === 'lifeLost';
-      const concentrate = s.readyReason === 'concentrate';
-      const caller = concentrate ? s.players.find((p) => p.id === s.concentratorId) : null;
-      $('#ready-title').textContent = lifeLost ? '💔 Life lost — regroup'
-        : concentrate ? '🧘 Concentrate'
-          : `Level ${s.level}`;
+      $('#ready-title').textContent = lifeLost ? '💔 Life lost — regroup' : `Level ${s.level}`;
       $('#ready-sub').textContent = lifeLost
         ? 'Take a breath together. Play resumes when everyone puts a hand back on the table.'
-        : concentrate
-          ? `${caller ? `${caller.avatar || ''} ${caller.name}`.trim() : 'Someone'} asks everyone to concentrate — hands on the table. Play resumes when everyone is ready again.`
-          : `Each player gets ${s.level} card${s.level === 1 ? '' : 's'}. They stay face-down until everyone is ready.`;
+        : `Each player gets ${s.level} card${s.level === 1 ? '' : 's'}. They stay face-down until everyone is ready.`;
       const list = $('#ready-list');
       list.innerHTML = '';
       for (const p of s.players) {
@@ -789,7 +909,32 @@
     sendMsg({ type: 'ready' });
   });
   $('#btn-star').addEventListener('click', () => sendMsg({ type: 'proposeStar' }));
-  $('#btn-concentrate').addEventListener('click', () => sendMsg({ type: 'concentrate' }));
+
+  // Concentrate is press-and-HOLD: like resting your hand on the table. While
+  // held, everyone sees a glowing hand at your seat. Cosmetic only.
+  (() => {
+    const btn = $('#btn-concentrate');
+    let holding = false;
+    const release = () => {
+      if (!holding) return;
+      holding = false;
+      btn.classList.remove('holding');
+      sendMsg({ type: 'concentrateStop' });
+    };
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (holding) return;
+      holding = true;
+      btn.classList.add('holding');
+      try { btn.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      sendMsg({ type: 'concentrateStart' });
+      vibrate(15);
+    });
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
+    btn.addEventListener('contextmenu', (e) => e.preventDefault()); // no long-press menu
+    window.addEventListener('blur', release);
+  })();
   $('#btn-vote-yes').addEventListener('click', () => sendMsg({ type: 'voteStar', agree: true }));
   $('#btn-vote-no').addEventListener('click', () => sendMsg({ type: 'voteStar', agree: false }));
   $('#btn-next-level').addEventListener('click', () => sendMsg({ type: 'nextLevel' }));

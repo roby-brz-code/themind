@@ -35,8 +35,12 @@ const LEVEL_REWARDS = { 2: 'star', 3: 'life', 5: 'star', 6: 'life', 8: 'star', 9
 const AVATARS = ['🦊', '🐼', '🐸', '🦉', '🐙', '🦄', '🐯', '🐨', '🐺', '🦁', '🐵', '🐹'];
 
 // Emotes players can broadcast during a game. Cosmetic only — never touch game state.
-const EMOTES = ['🙌', '👏', '🔥', '😱', '😅', '❤️', '🤯', '🎉'];
+const EMOTES = ['🙌', '👏', '🔥', '😱', '😅', '❤️', '🤯', '🎉', '🍑', '🍆', '💦'];
 const EMOTE_COOLDOWN_MS = 1000;
+
+// A concentrate "hand on the table" hold auto-clears after this long as a safety
+// net (e.g. the releasing message got lost, or the tab was backgrounded).
+const CONCENTRATE_TTL_MS = 30 * 1000;
 
 const levelsFor = (n) => (n <= 2 ? 12 : n === 3 ? 10 : 8);
 const livesFor = (n) => Math.min(n, 4);
@@ -118,14 +122,13 @@ function createRoom() {
     code: makeCode(),
     players: [],
     phase: 'lobby', // lobby | readyCheck | playing | levelComplete | gameOver | won
-    readyReason: null, // levelStart | lifeLost | concentrate
+    readyReason: null, // levelStart | lifeLost
     level: 0,
     totalLevels: 0,
     lives: 0,
     stars: 0,
     pile: [],
     history: [], // everything revealed this level, in order: { card, kind: 'played'|'discard', playerId }
-    concentratorId: null, // who called the current concentrate pause
     vote: null, // { proposerId, votes: { [playerId]: true } }
     lastReward: null,
     eventSeq: 0,
@@ -149,6 +152,8 @@ function createPlayer(name, isHost, avatar) {
     discards: [], // face-up discards this level, visible to everyone
     ready: false,
     lastEmoteAt: 0,
+    concentrating: false, // press-and-hold "hand on the table" glow (cosmetic only)
+    concentrateTimer: null,
   };
 }
 
@@ -177,7 +182,6 @@ function dealLevel(room) {
   room.pile = [];
   room.history = [];
   room.vote = null;
-  room.concentratorId = null;
   room.phase = 'readyCheck';
   room.readyReason = 'levelStart';
 }
@@ -229,14 +233,13 @@ function stateFor(room, viewer) {
     room.phase === 'levelComplete' ||
     room.phase === 'gameOver' ||
     room.phase === 'won' ||
-    (room.phase === 'readyCheck' && ['lifeLost', 'concentrate'].includes(room.readyReason));
+    (room.phase === 'readyCheck' && room.readyReason === 'lifeLost');
   return {
     type: 'state',
     code: room.code,
     you: viewer.id,
     phase: room.phase,
     readyReason: room.readyReason,
-    concentratorId: room.concentratorId,
     level: room.level,
     totalLevels: room.totalLevels,
     lives: room.lives,
@@ -257,6 +260,7 @@ function stateFor(room, viewer) {
       connected: p.connected,
       cardCount: p.hand.length,
       ready: p.ready,
+      concentrating: p.concentrating === true,
       discards: p.discards,
       voted: room.vote ? room.vote.votes[p.id] === true : false,
       revealed: revealAll && p.id !== viewer.id ? p.hand : undefined,
@@ -366,7 +370,6 @@ function doReady(room, player) {
   if (room.players.every((p) => p.ready && p.connected)) {
     room.phase = 'playing';
     room.readyReason = null;
-    room.concentratorId = null;
     emit(room, { kind: 'playBegins', level: room.level });
   }
 }
@@ -452,15 +455,33 @@ function doVoteStar(room, player, agree) {
   }
 }
 
-function doConcentrate(room, player) {
-  // Rate limit: ignore while any pause or vote is already active.
-  if (room.phase !== 'playing') fail('You can only call for concentration during play');
-  if (room.vote) fail('A star vote is in progress');
-  room.phase = 'readyCheck';
-  room.readyReason = 'concentrate';
-  room.concentratorId = player.id;
-  for (const p of room.players) p.ready = false;
-  emit(room, { kind: 'concentrate', playerId: player.id, name: player.name });
+/** Clear a player's concentrate hold (and its safety timer). */
+function clearConcentrate(player) {
+  if (player.concentrateTimer) {
+    clearTimeout(player.concentrateTimer);
+    player.concentrateTimer = null;
+  }
+  player.concentrating = false;
+}
+
+/**
+ * Press-and-hold "concentrate": purely cosmetic, like emotes. While held, every
+ * client shows a glowing hand at the player's seat. Never pauses the game or
+ * blocks plays. Auto-clears after CONCENTRATE_TTL_MS as a safety net.
+ */
+function doConcentrate(room, player, on) {
+  if (room.phase === 'lobby') fail('Concentrate is for the game table');
+  clearConcentrate(player);
+  if (on) {
+    player.concentrating = true;
+    player.concentrateTimer = setTimeout(() => {
+      player.concentrateTimer = null;
+      if (player.concentrating) {
+        player.concentrating = false;
+        broadcast(room);
+      }
+    }, CONCENTRATE_TTL_MS);
+  }
 }
 
 function doEmote(room, player, emote) {
@@ -492,6 +513,7 @@ function doPlayAgain(room, player) {
     p.hand = [];
     p.discards = [];
     p.ready = false;
+    clearConcentrate(p);
   }
   if (room.players.length < MIN_PLAYERS) {
     room.phase = 'lobby';
@@ -499,7 +521,6 @@ function doPlayAgain(room, player) {
     room.level = 0;
     room.pile = [];
     room.history = [];
-    room.concentratorId = null;
     emit(room, { kind: 'backToLobby' });
   } else {
     startGame(room);
@@ -563,7 +584,8 @@ function handleMessage(ws, msg) {
     case 'playCard': doPlayCard(room, player); break;
     case 'proposeStar': doProposeStar(room, player); break;
     case 'voteStar': doVoteStar(room, player, msg.agree === true); break;
-    case 'concentrate': doConcentrate(room, player); break;
+    case 'concentrateStart': doConcentrate(room, player, true); break;
+    case 'concentrateStop': doConcentrate(room, player, false); break;
     case 'emote': doEmote(room, player, msg.emote); break;
     case 'nextLevel': doNextLevel(room, player); break;
     case 'playAgain': doPlayAgain(room, player); break;
@@ -593,6 +615,7 @@ function handleDisconnect(ws) {
     // Mid-game: keep the seat, pause play, allow reconnect via session token.
     player.connected = false;
     player.ready = false;
+    clearConcentrate(player); // never leave a ghost hand glowing on the table
     if (room.vote) {
       room.vote = null;
       emit(room, { kind: 'starDeclined', name: player.name, reason: 'disconnect' });

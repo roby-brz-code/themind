@@ -7,9 +7,10 @@
  *
  * Covers: create/join room (with avatars), start, ready-check, playing a level
  * in order, a forced mistake (life loss + auto-discard + re-ready), a unanimous
- * star, level rewards, the play history, concentrate pauses, emotes (broadcast,
- * rate limit, validation), disconnect/pause/reconnect via session token, and
- * the anti-cheat guarantee that other players' card values are never sent.
+ * star, level rewards, the play history, concentrate hold/release (cosmetic,
+ * never blocks play), emotes (broadcast, rate limit, validation), disconnect/
+ * pause/reconnect via session token, and the anti-cheat guarantee that other
+ * players' card values are never sent.
  */
 
 const WebSocket = require('ws');
@@ -319,29 +320,31 @@ async function main() {
   ok(JSON.stringify(starDiscardsInHistory) === JSON.stringify(expectedLowest),
     'star discards appear in the play history, marked as discards');
 
-  // ---------- concentrate ----------
-  console.log('\n7. Concentrate — pause + re-ready, spam protected');
-  bob2.send({ type: 'concentrate' });
-  await everyone(players2, (s) => s.phase === 'readyCheck' && s.readyReason === 'concentrate',
-    'concentrate triggers a hands-on-the-table pause for everyone');
-  ok(alice.state.concentratorId === bob2.state.you, 'state says who asked for the pause');
-  const concEv = alice.state.events.find((e) => e.kind === 'concentrate');
-  ok(concEv && concEv.name === 'Bob', 'concentrate event broadcast to everyone');
+  // ---------- concentrate (press-and-hold, cosmetic only) ----------
+  console.log('\n7. Concentrate — hold/release broadcast, never blocks play');
+  bob2.send({ type: 'concentrateStart' });
+  await everyone(players2, (s) => s.players.some((p) => p.name === 'Bob' && p.concentrating === true),
+    'concentrate hold is broadcast to every player in state');
+  ok(alice.state.phase === 'playing', 'a concentrate hold does NOT pause the game');
+  ok(players2.every((c) => c.state.players.find((p) => p.name === 'Bob').concentrating === true),
+    'every client sees the same concentrating flag');
+  ok(players2.every((c) => c.state.players.filter((p) => p.name !== 'Bob').every((p) => !p.concentrating)),
+    'only the holder is flagged as concentrating');
 
-  carol.send({ type: 'playCard' });
-  ok(/only play cards during a level/i.test((await carol.waitError('play during concentrate')).message),
-    'plays are blocked during a concentrate pause');
-  alice.send({ type: 'concentrate' });
-  ok(/during play/i.test((await alice.waitError('concentrate while paused')).message),
-    'concentrate is rejected while a pause is already active (no spam)');
+  // A card play must go through while someone is holding concentrate.
+  const cHolders = players2.filter((c) => c.hand.length > 0).sort((a, b) => a.hand[0] - b.hand[0]);
+  const cPlayer = cHolders[0];
+  const cPrevPile = cPlayer.state.pileCount;
+  cPlayer.send({ type: 'playCard' });
+  await everyone(players2, (s) => s.pileCount === cPrevPile + 1, 'card lands while concentrate is held');
+  ok(alice.state.phase === 'playing', 'plays are never blocked by a concentrate hold');
+  ok(alice.state.players.find((p) => p.name === 'Bob').concentrating === true,
+    'the hold survives other players’ plays');
 
-  alice.send({ type: 'ready' });
-  bob2.send({ type: 'ready' });
-  await everyone(players2, (s) => s.players.filter((p) => p.ready).length === 2, 'two of three ready');
-  ok(alice.state.phase === 'readyCheck', 'play stays paused until EVERYONE is ready');
-  carol.send({ type: 'ready' });
-  await everyone(players2, (s) => s.phase === 'playing', 'play resumes once all players are ready');
-  ok(alice.state.concentratorId === null, 'concentrate pause fully cleared on resume');
+  bob2.send({ type: 'concentrateStop' });
+  await everyone(players2, (s) => s.players.every((p) => p.concentrating !== true),
+    'release clears the concentrating flag for everyone');
+  ok(alice.state.phase === 'playing', 'release does not touch game state either');
 
   // ---------- emotes ----------
   console.log('\n8. Emotes — broadcast, rate limit, validation');
@@ -355,6 +358,10 @@ async function main() {
   carol.send({ type: 'emote', emote: '🎉' }); // immediately again → rate limited
   ok(/one emote per second/i.test((await carol.waitError('emote rate limit')).message),
     'emotes are rate-limited to 1 per second per player');
+  await sleep(1100);
+  carol.send({ type: 'emote', emote: '🍆' }); // one of the newer emotes must be allowed
+  await everyone(players2, (s) => s.events.some((e) => e.kind === 'emote' && e.emote === '🍆'),
+    'new emotes (🍑 🍆 💦) are in the allowed set and broadcast');
   await sleep(1100);
   carol.send({ type: 'emote', emote: '💣' });
   ok(/not allowed/i.test((await carol.waitError('invalid emote')).message),
