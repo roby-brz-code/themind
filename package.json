@@ -1,0 +1,17 @@
+{
+  "name": "the-mind",
+  "version": "1.0.0",
+  "description": "Real-time multiplayer web version of the cooperative card game The Mind — play with friends over a video call.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/simulate.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "MIT"
+}

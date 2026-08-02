@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1020">
+  <title>The Mind — play online with friends</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- ============ HOME ============ -->
+  <section id="screen-home" class="screen">
+    <div class="home-card">
+      <h1 class="logo">The&nbsp;Mind</h1>
+      <p class="tagline">The cooperative card game — play it live on your video call.</p>
+      <label class="field">
+        <span>Your name</span>
+        <input id="name-input" type="text" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam">
+      </label>
+      <button id="btn-create" class="btn btn-primary btn-big">Create a room</button>
+      <div class="divider"><span>or join a friend's room</span></div>
+      <div class="join-row">
+        <input id="code-input" type="text" maxlength="5" placeholder="CODE" autocapitalize="characters" autocomplete="off" spellcheck="false">
+        <button id="btn-join" class="btn btn-secondary">Join</button>
+      </div>
+      <p id="home-error" class="error-text" role="alert"></p>
+      <p id="home-status" class="muted-text"></p>
+    </div>
+    <p class="home-foot">2–6 players &middot; one shared brain &middot; no talking about numbers 🤫</p>
+  </section>
+
+  <!-- ============ LOBBY ============ -->
+  <section id="screen-lobby" class="screen hidden">
+    <div class="lobby-card">
+      <p class="lobby-label">Room code — share it on your call</p>
+      <div class="code-row">
+        <span id="lobby-code" class="room-code">·····</span>
+        <button id="btn-copy" class="btn btn-ghost" title="Copy invite link">Copy link</button>
+      </div>
+      <ul id="lobby-players" class="lobby-players"></ul>
+      <p id="lobby-hint" class="muted-text"></p>
+      <button id="btn-start" class="btn btn-primary btn-big hidden">Start game</button>
+      <div class="rules-box">
+        <h3>How it works</h3>
+        <p>Everyone's cards (1–100) must hit the pile in <b>ascending order</b> — with no turns and
+          <b>no talking about your numbers</b>. Feel the silence on the call, trust the pause, and
+          play your lowest card when the moment is right.</p>
+      </div>
+      <button id="btn-leave" class="btn btn-ghost btn-small">Leave room</button>
+    </div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="screen-game" class="screen hidden">
+    <header id="hud">
+      <div class="hud-left">
+        <span id="hud-level" class="hud-chip hud-level">Level 1</span>
+        <span id="hud-code" class="hud-chip hud-code" title="Room code"></span>
+      </div>
+      <div class="hud-right">
+        <span id="hud-lives" class="hud-chip hud-lives" title="Lives"></span>
+        <span id="hud-shurikens" class="hud-chip hud-shurikens" title="Shurikens"></span>
+      </div>
+    </header>
+
+    <div id="table">
+      <div id="opponents"></div>
+      <div id="pile-area">
+        <div id="pile"><div class="pile-slot">1–100</div></div>
+        <div id="pile-caption" class="muted-text"></div>
+      </div>
+      <div id="pause-banner" class="pause-banner hidden"></div>
+    </div>
+
+    <div id="me-area">
+      <div id="my-discards" class="discard-row"></div>
+      <div id="hand"></div>
+      <div id="action-bar">
+        <button id="btn-shuriken" class="btn btn-shuriken hidden">★ Propose shuriken</button>
+        <span class="honor-note">🎥 Talk all you want — <b>never about your numbers</b></span>
+      </div>
+    </div>
+
+    <!-- Ready check overlay -->
+    <div id="overlay-ready" class="overlay hidden">
+      <div class="overlay-panel">
+        <h2 id="ready-title">Level 1</h2>
+        <p id="ready-sub" class="muted-text"></p>
+        <ul id="ready-list" class="ready-list"></ul>
+        <button id="btn-ready" class="btn btn-primary btn-big">🖐 I'm ready — hand on the table</button>
+        <p id="ready-waiting" class="muted-text hidden">Focus… waiting for the others.</p>
+      </div>
+    </div>
+
+    <!-- Shuriken vote modal -->
+    <div id="overlay-vote" class="overlay hidden">
+      <div class="overlay-panel">
+        <h2>★ Shuriken proposed</h2>
+        <p id="vote-text"></p>
+        <p class="muted-text">If everyone agrees, each player throws away their lowest card face-up.</p>
+        <ul id="vote-list" class="ready-list"></ul>
+        <div id="vote-buttons" class="btn-row">
+          <button id="btn-vote-yes" class="btn btn-primary">Agree ★</button>
+          <button id="btn-vote-no" class="btn btn-secondary">Decline</button>
+        </div>
+        <p id="vote-waiting" class="muted-text hidden">Waiting for everyone to agree…</p>
+      </div>
+    </div>
+
+    <!-- Level complete overlay -->
+    <div id="overlay-level" class="overlay hidden">
+      <div class="overlay-panel">
+        <h2 id="level-done-title">Level complete!</h2>
+        <p id="level-reward" class="reward-text"></p>
+        <button id="btn-next-level" class="btn btn-primary btn-big hidden">Deal level 2 →</button>
+        <p id="level-waiting" class="muted-text hidden">Waiting for the host to deal the next level…</p>
+      </div>
+    </div>
+
+    <!-- Game over / won overlay -->
+    <div id="overlay-end" class="overlay hidden">
+      <div class="overlay-panel">
+        <h2 id="end-title"></h2>
+        <p id="end-sub" class="muted-text"></p>
+        <button id="btn-play-again" class="btn btn-primary btn-big hidden">Play again</button>
+        <p id="end-waiting" class="muted-text hidden">Waiting for the host…</p>
+        <button id="btn-end-leave" class="btn btn-ghost btn-small">Leave room</button>
+      </div>
+    </div>
+
+    <div id="flash"></div>
+  </section>
+
+  <div id="toasts"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
